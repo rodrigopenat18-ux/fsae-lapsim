@@ -13,7 +13,9 @@ FetchContent_MakeAvailable(doctest)
 add_executable(fsae_tests
     test_main.cpp
     test_version.cpp
+    test_math.cpp
 )
+target_include_directories(fsae_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fsae_tests PRIVATE fsae::core doctest::doctest fsae_compile_options)
 
 # Pasta com os dados de referência gerados pelo MATLAB (Fase 1)

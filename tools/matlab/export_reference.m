@@ -35,6 +35,9 @@ function export_reference(out_dir)
 
     car = initializeCar();
 
+    fprintf('[0/10] Funcoes matematicas (linspace, interp1, pchip)\n');
+    export_math(unit_dir);
+
     fprintf('[1/10] Parametros do carro e motor\n');
     export_car(car, unit_dir);
 
@@ -88,6 +91,55 @@ end
 % =========================================================================
 %  Seções
 % =========================================================================
+
+function export_math(d)
+    % linspace: mesmos formatos usados no runSimulation (início em 0, fim decimal)
+    ends = [0.37, 5.123, 51.5, 1.4, 0.1, 2.9999, 123.456789, 7.15e-3, 1e5/3];
+    ns = [1, 2, 3, 4, 7, 10, 25, 103, 1001];
+    rows = zeros(0, 5);
+    c = 0;
+    for b = ends
+        for n = ns
+            c = c + 1;
+            y = linspace(0, b, n);
+            rows = [rows; repmat([c, 0, b, n], n, 1), y(:)]; %#ok<AGROW>
+        end
+    end
+    % alguns casos com início diferente de zero
+    for ab = [1.5, 9.75; -3.2, 4.4; 10, 2]'
+        for n = [2, 5, 33]
+            c = c + 1;
+            y = linspace(ab(1), ab(2), n);
+            rows = [rows; repmat([c, ab(1), ab(2), n], n, 1), y(:)]; %#ok<AGROW>
+        end
+    end
+    write_csv(fullfile(d, 'linspace.csv'), {'case', 'a', 'b', 'n', 'value'}, rows);
+
+    % interp1 linear com extrapolação (tabela de Cp do calculateBrakeTemp)
+    T_ref = [25, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+    Cp_ref = [490, 515, 550, 580, 605, 630, 655, 680, 705, 725, 745];
+    T = unique([linspace(-50, 1200, 2501)'; T_ref'; 25.000000001; 999.99999]);
+    write_csv(fullfile(d, 'interp1_linear_extrap.csv'), {'x', 'y'}, ...
+              [T, interp1(T_ref, Cp_ref, T, 'linear', 'extrap')]);
+
+    % griddedInterpolant pchip / linear em conjuntos pequenos (casos de borda)
+    sets = {
+        [0, 1],             [2, 5];             % 2 pontos
+        [0, 1, 3],          [0, 2, 1];          % 3 pontos, muda de sinal
+        [0, 1, 2, 4, 5],    [1, 1, 3, 3, 0];    % patamares (derivada zero)
+        [-2, 0.5, 1, 7],    [4, -1, -1.5, 10];  % espaçamento irregular
+    };
+    rows = zeros(0, 4);
+    for s = 1:size(sets, 1)
+        x = sets{s, 1}; y = sets{s, 2};
+        xq = linspace(x(1) - 1.5, x(end) + 1.5, 101)';
+        xq = unique([xq; x(:)]);
+        gp = griddedInterpolant(x, y, 'pchip');
+        gl = griddedInterpolant(x, y, 'linear');
+        rows = [rows; repmat(s, numel(xq), 1), xq, gp(xq), gl(xq)]; %#ok<AGROW>
+    end
+    write_csv(fullfile(d, 'gridded_small.csv'), {'set', 'x', 'pchip', 'linear'}, rows);
+end
 
 function export_car(car, d)
     % Todos os parâmetros numéricos do carro (escalares e vetores).

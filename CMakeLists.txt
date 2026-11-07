@@ -45,6 +45,8 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(fsae_core
     src/version.cpp
+    src/io/csv.cpp
+    src/math/interp.cpp
 )
 add_library(fsae::core ALIAS fsae_core)
 target_include_directories(fsae_core
