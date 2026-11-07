@@ -58,6 +58,7 @@ add_library(fsae_core
     src/version.cpp
     src/io/csv.cpp
     src/io/car_json.cpp
+    src/io/results.cpp
     src/math/interp.cpp
     src/vehicle/engine.cpp
     src/vehicle/car.cpp
