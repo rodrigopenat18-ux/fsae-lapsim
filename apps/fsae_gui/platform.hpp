@@ -26,6 +26,9 @@ std::vector<std::filesystem::path> data_dirs();
 /// Primeira pasta `data/<sub>` existente (vazio se nenhuma).
 std::filesystem::path find_data_subdir(const std::string& sub);
 
+/// Arquivo de preferências da interface (%APPDATA%\fsae_lapsim\gui.ini no Windows).
+std::filesystem::path settings_path();
+
 /// UTF-8 para exibir caminhos na interface.
 std::string to_utf8(const std::filesystem::path& p);
 

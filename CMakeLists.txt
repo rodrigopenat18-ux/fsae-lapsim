@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(fsae_lapsim
     VERSION 0.1.0
     DESCRIPTION "Formula SAE lap time simulator (C++ port of the MATLAB simulator)"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 # Opções
@@ -55,11 +55,25 @@ FetchContent_Declare(nlohmann_json
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(nlohmann_json)
 
+# miniz: leitura de arquivos .xlsx (zip). Só os fontes da versão oficial.
+FetchContent_Declare(miniz
+    URL https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
+    URL_HASH SHA256=ada38db0b703a56d3dd6d57bf84a9c5d664921d870d8fea4db153979fb5332c5
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_GetProperties(miniz)
+if(NOT miniz_POPULATED)
+    FetchContent_Populate(miniz)
+endif()
+add_library(fsae_miniz STATIC ${miniz_SOURCE_DIR}/miniz.c)
+target_include_directories(fsae_miniz SYSTEM PUBLIC ${miniz_SOURCE_DIR})
+set_target_properties(fsae_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_library(fsae_core
     src/version.cpp
     src/io/csv.cpp
     src/io/car_json.cpp
     src/io/results.cpp
+    src/io/table_import.cpp
     src/math/interp.cpp
     src/vehicle/engine.cpp
     src/vehicle/car.cpp
@@ -79,7 +93,7 @@ target_include_directories(fsae_core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
-target_link_libraries(fsae_core PRIVATE fsae_compile_options nlohmann_json::nlohmann_json)
+target_link_libraries(fsae_core PRIVATE fsae_compile_options nlohmann_json::nlohmann_json fsae_miniz)
 
 configure_file(cmake/version_config.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/generated/fsae/version_config.hpp @ONLY)

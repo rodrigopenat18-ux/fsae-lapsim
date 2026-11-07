@@ -13,29 +13,121 @@
 #include "app.hpp"
 #include "fsae/control/gearbox.hpp"
 #include "fsae/physics/powertrain.hpp"
+#include "theme.hpp"
 
 namespace fsae::gui {
 
 namespace {
 
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
-const ImVec4 kTrackGray(0.36f, 0.36f, 0.36f, 1.0f);
-const ImVec4 kMuted(0.65f, 0.65f, 0.62f, 1.0f);
 
-/// Mapa de cor sequencial de um só tom (escuro -> claro sobre fundo escuro).
-ImPlotColormap sequential_colormap() {
-    static ImPlotColormap id = -1;
-    if (id < 0) {
-        const ImVec4 c[] = {
-            ImVec4(0.10f, 0.20f, 0.36f, 1), ImVec4(0.12f, 0.30f, 0.55f, 1),
-            ImVec4(0.16f, 0.42f, 0.74f, 1), ImVec4(0.27f, 0.56f, 0.88f, 1),
-            ImVec4(0.47f, 0.70f, 0.94f, 1), ImVec4(0.69f, 0.83f, 0.97f, 1),
-            ImVec4(0.88f, 0.94f, 1.00f, 1)};
-        id = ImPlot::GetColormapIndex("Sequencial");
-        if (id < 0) id = ImPlot::AddColormap("Sequencial", c, IM_ARRAYSIZE(c), false);
-    }
+/// Turbo (Google): aproximação polinomial publicada por Anton Mikhailov.
+ImVec4 turbo(float t) {
+    const float t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
+    auto clamp01 = [](float v) { return std::min(1.0f, std::max(0.0f, v)); };
+    return ImVec4(
+        clamp01(0.13572138f + 4.61539260f * t - 42.66032258f * t2 + 132.13108234f * t3 - 152.94239396f * t4 + 59.28637943f * t5),
+        clamp01(0.09140261f + 2.19418839f * t + 4.84296658f * t2 - 14.18503333f * t3 + 4.27729857f * t4 + 2.82956604f * t5),
+        clamp01(0.10667330f + 12.64194608f * t - 60.58204836f * t2 + 110.36276771f * t3 - 89.90310912f * t4 + 27.34824973f * t5),
+        1.0f);
+}
+
+/// Cria (uma vez) um mapa de cores a partir de amostras.
+ImPlotColormap custom_colormap(const char* name, const std::vector<ImVec4>& c) {
+    ImPlotColormap id = ImPlot::GetColormapIndex(name);
+    if (id < 0) id = ImPlot::AddColormap(name, c.data(), static_cast<int>(c.size()), false);
     return id;
 }
+
+struct ColormapOption {
+    const char* name;
+    ImPlotColormap builtin;  ///< -1 = personalizado
+};
+
+const ColormapOption kColormaps[] = {
+    {"Viridis", ImPlotColormap_Viridis},  {"Turbo", -1},
+    {"Plasma", ImPlotColormap_Plasma},    {"Jet", ImPlotColormap_Jet},
+    {"Hot", ImPlotColormap_Hot},          {"Cool", ImPlotColormap_Cool},
+    {"Vermelho-Azul (RdBu)", ImPlotColormap_RdBu},
+    {"Espectral", ImPlotColormap_Spectral},
+    {"Marrom-Verde (BrBG)", ImPlotColormap_BrBG},
+    {"Rosa-Verde (PiYG)", ImPlotColormap_PiYG},
+    {"Twilight", ImPlotColormap_Twilight},
+    {"Rosa", ImPlotColormap_Pink},
+    {"Cinzas", ImPlotColormap_Greys},
+    {"Azul (um tom)", -1},
+};
+
+ImPlotColormap base_colormap(int i) {
+    const auto& o = kColormaps[static_cast<std::size_t>(i)];
+    if (o.builtin >= 0) return o.builtin;
+    std::vector<ImVec4> c;
+    if (std::string(o.name) == "Turbo") {
+        for (int k = 0; k < 64; ++k) c.push_back(turbo(static_cast<float>(k) / 63.0f));
+    } else {  // azul de um tom só
+        c = {ImVec4(0.86f, 0.92f, 0.98f, 1), ImVec4(0.62f, 0.78f, 0.94f, 1), ImVec4(0.35f, 0.60f, 0.88f, 1),
+             ImVec4(0.16f, 0.42f, 0.76f, 1), ImVec4(0.08f, 0.26f, 0.52f, 1)};
+    }
+    return custom_colormap(o.name, c);
+}
+
+/// Mapa de cores escolhido, invertido se pedido (cópia invertida criada sob demanda).
+ImPlotColormap pick_colormap(int i, bool invert) {
+    const ImPlotColormap base = base_colormap(i);
+    if (!invert) return base;
+    const std::string name = std::string(kColormaps[static_cast<std::size_t>(i)].name) + " (invertido)";
+    ImPlotColormap id = ImPlot::GetColormapIndex(name.c_str());
+    if (id >= 0) return id;
+    std::vector<ImVec4> c;
+    const int n = ImPlot::GetColormapSize(base);
+    for (int k = n - 1; k >= 0; --k) c.push_back(ImPlot::GetColormapColor(k, base));
+    return custom_colormap(name.c_str(), c);
+}
+
+}  // namespace
+
+int colormap_count() { return IM_ARRAYSIZE(kColormaps); }
+const char* colormap_name(int i) {
+    return kColormaps[static_cast<std::size_t>(std::clamp(i, 0, colormap_count() - 1))].name;
+}
+
+Series App::series(const Run& r, int channel, int lap, bool x_is_distance) const {
+    Series s;
+    const auto& y = r.channels[static_cast<std::size_t>(channel)];
+    const auto& t = r.channels[0];
+    const auto& d = r.channels[1];
+    const int k = lap < 0 ? r.result.laps : lap;
+    if (k > r.result.laps) return s;
+    double t0 = 0, d0 = 0;
+    bool first = true;
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        if (k > 0 && r.lap[i] != k) continue;
+        if (first && k > 1) {
+            t0 = t[i];
+            d0 = static_cast<double>(k - 1) * r.result.track_length;
+        }
+        first = false;
+        s.x.push_back(x_is_distance ? d[i] - d0 : t[i] - t0);
+        // Os próprios canais de tempo e distância também começam em zero na volta.
+        s.y.push_back(channel == 0 ? y[i] - t0 : channel == 1 ? y[i] - d0 : y[i]);
+    }
+    return s;
+}
+
+Series App::series_xy(const Run& r, int cx, int cy, int lap) const {
+    Series s;
+    const auto& x = r.channels[static_cast<std::size_t>(cx)];
+    const auto& y = r.channels[static_cast<std::size_t>(cy)];
+    const int k = lap < 0 ? r.result.laps : lap;
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        if (k > 0 && r.lap[i] != k) continue;
+        s.x.push_back(x[i]);
+        s.y.push_back(y[i]);
+    }
+    return s;
+}
+
+namespace {
 
 std::string item_id(const Run& r) { return r.label + "##" + std::to_string(r.id); }
 
@@ -204,6 +296,34 @@ void App::tab_track_map() {
     ImGui::SameLine();
     if (lap_combo(plot_lap_, max_laps())) ++view_gen_;
 
+    // Segunda linha: aparência do mapa
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::BeginCombo("Mapa de cores", colormap_name(map_cmap_))) {
+        for (int i = 0; i < colormap_count(); ++i) {
+            ImGui::PushID(i);
+            // Amostra do mapa de cores ao lado do nome
+            const ImPlotColormap cm = pick_colormap(i, map_invert_);
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+            const float w = 70, h = ImGui::GetTextLineHeight();
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            for (int k = 0; k < 14; ++k) {
+                const ImU32 col = ImGui::GetColorU32(ImPlot::SampleColormap(static_cast<float>(k) / 13.0f, cm));
+                const float k0 = static_cast<float>(k), k1 = static_cast<float>(k + 1);
+                dl->AddRectFilled(ImVec2(p.x + w * k0 / 14, p.y + 2), ImVec2(p.x + w * k1 / 14, p.y + h - 1), col);
+            }
+            ImGui::Dummy(ImVec2(w + 6, h));
+            ImGui::SameLine();
+            if (ImGui::Selectable(colormap_name(i), i == map_cmap_)) map_cmap_ = i;
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Inverter", &map_invert_);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(140);
+    ImGui::SliderFloat("Espessura", &map_width_, 2.0f, 20.0f, "%.0f px");
+
     const Series vals = series(r, map_channel_, plot_lap_, true);
     if (vals.x.empty()) {
         ImGui::TextDisabled("Esta execução não tem essa volta.");
@@ -220,14 +340,14 @@ void App::tab_track_map() {
     double vmax = *std::max_element(vals.y.begin(), vals.y.end());
     if (!(vmax > vmin)) vmax = vmin + 1;
 
-    const ImPlotColormap cmap = sequential_colormap();
+    const ImPlotColormap cmap = pick_colormap(map_cmap_, map_invert_);
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const float scale_w = 90;
     if (needs_fit(1)) ImPlot::SetNextAxesToFit();
     if (ImPlot::BeginPlot("##mapa", ImVec2(avail.x - scale_w, avail.y), ImPlotFlags_Equal | ImPlotFlags_NoLegend)) {
         ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoTickLabels, ImPlotAxisFlags_NoTickLabels);
         const auto& g = r.geometry;
-        ImPlot::SetNextLineStyle(kTrackGray, 13.0f);
+        ImPlot::SetNextLineStyle(color_track(), map_width_ + 5.0f);
         ImPlot::PlotLine("pista", g.x.data(), g.y.data(), static_cast<int>(g.size()));
 
         ImPlot::PushPlotClipRect();
@@ -237,11 +357,12 @@ void App::tab_track_map() {
             const ImU32 col = ImGui::GetColorU32(ImPlot::SampleColormap(static_cast<float>(t), cmap));
             const ImVec2 a = ImPlot::PlotToPixels(g.x[idx[i - 1]], g.y[idx[i - 1]]);
             const ImVec2 b = ImPlot::PlotToPixels(g.x[idx[i]], g.y[idx[i]]);
-            dl->AddLine(a, b, col, 8.0f);
+            dl->AddLine(a, b, col, map_width_);
         }
         // Largada
         const ImVec2 start = ImPlot::PlotToPixels(g.x.front(), g.y.front());
-        dl->AddCircleFilled(start, 6, IM_COL32(255, 255, 255, 255));
+        dl->AddCircleFilled(start, map_width_ * 0.5f + 4, ImGui::GetColorU32(ImGuiCol_Text));
+        dl->AddCircleFilled(start, map_width_ * 0.5f + 2, ImGui::GetColorU32(ImPlot::GetStyle().Colors[ImPlotCol_PlotBg]));
         ImPlot::PopPlotClipRect();
         ImPlot::PlotText("largada", g.x.front(), g.y.front(), ImVec2(0, -16));
 
@@ -319,7 +440,7 @@ void App::tab_xy() {
 // ---------------------------------------------------------------------------
 void App::tab_engine() {
     if (!car_valid_) {
-        ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1), "Carro inválido: %s", car_error_.c_str());
+        ImGui::TextColored(color_error(), "Carro inválido: %s", car_error_.c_str());
         return;
     }
     const fsae::Car car = fsae::Car::from_spec(spec_);
@@ -340,7 +461,7 @@ void App::tab_engine() {
         brpm[i] = bx.front() + (bx.back() - bx.front()) * i / (N - 1);
         bsfc[i] = car.engine.bsfc(brpm[i]);
     }
-    const ImVec4 c0(0.22f, 0.53f, 0.90f, 1), c1(0.85f, 0.35f, 0.15f, 1);
+    const ImVec4 c0 = run_palette(0);
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const float half = avail.x * 0.5f - 4;
 
@@ -349,7 +470,7 @@ void App::tab_engine() {
         std::vector<double> up(car.shift_rpm.begin(), car.shift_rpm.end());
         std::sort(up.begin(), up.end());
         up.erase(std::unique(up.begin(), up.end()), up.end());
-        ImPlot::SetNextLineStyle(kMuted, 1.0f);
+        ImPlot::SetNextLineStyle(color_muted(), 1.0f);
         ImPlot::PlotInfLines("RPM de subida", up.data(), static_cast<int>(up.size()), fl);
         const double marks[] = {car.launch_rpm, car.downshift_rpm};
         ImPlot::SetNextLineStyle(ImVec4(0.6f, 0.6f, 0.6f, 0.6f), 1.0f);
@@ -394,10 +515,6 @@ void App::tab_engine() {
     if (fit) ImPlot::SetNextAxesToFit();
     if (ImPlot::BeginPlot("Rotação x velocidade por marcha", ImVec2(half, avail.y))) {
         ImPlot::SetupAxes("Velocidade [km/h]", "Rotação [rpm]", ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-        static const ImVec4 gear_cols[] = {
-            ImVec4(0.22f, 0.53f, 0.90f, 1), ImVec4(0.85f, 0.35f, 0.15f, 1), ImVec4(0.10f, 0.62f, 0.44f, 1),
-            ImVec4(0.79f, 0.52f, 0.00f, 1), ImVec4(0.84f, 0.32f, 0.51f, 1), ImVec4(0.00f, 0.51f, 0.00f, 1),
-            ImVec4(0.56f, 0.52f, 0.91f, 1), ImVec4(0.90f, 0.40f, 0.40f, 1)};
         for (int g = 1; g <= car.gear_count(); ++g) {
             double xs[2], ys[2];
             for (int k = 0; k < 2; ++k) {
@@ -405,7 +522,7 @@ void App::tab_engine() {
                 const double rpm1 = fsae::physics::engine_rpm(car, 1.0, g);  // rpm a 1 m/s
                 xs[k] = ys[k] / rpm1 * 3.6;
             }
-            ImPlot::SetNextLineStyle(gear_cols[(g - 1) % 8], 2);
+            ImPlot::SetNextLineStyle(run_palette(g - 1), 2.5f);
             ImPlot::PlotLine(("Marcha " + std::to_string(g)).c_str(), xs, ys, 2);
         }
         rpm_marks(true);
@@ -463,9 +580,15 @@ void App::tab_corners() {
         if (n <= 60) ImPlot::SetupAxisTicks(ImAxis_X1, ticks.data(), n, label_ptrs.data());
         const char* items[] = {"Limite (aderência/tombamento)", "Real na volta"};
         ImPlot::SetupLegend(ImPlotLocation_North, ImPlotLegendFlags_Horizontal | ImPlotLegendFlags_Outside);
-        ImPlot::PushColormap(ImPlotColormap_Deep);
-        ImPlot::PlotBarGroups(items, values.data(), 2, n, 0.75);
-        ImPlot::PopColormap();
+        std::vector<double> xa(static_cast<std::size_t>(n)), xb(static_cast<std::size_t>(n));
+        for (int i = 0; i < n; ++i) {
+            xa[static_cast<std::size_t>(i)] = i - 0.19;
+            xb[static_cast<std::size_t>(i)] = i + 0.19;
+        }
+        ImPlot::SetNextFillStyle(run_palette(0));
+        ImPlot::PlotBars(items[0], xa.data(), values.data(), n, 0.36);
+        ImPlot::SetNextFillStyle(run_palette(1));
+        ImPlot::PlotBars(items[1], xb.data(), values.data() + n, n, 0.36);
         ImPlot::EndPlot();
     }
     if (ImGui::BeginTable("curvas", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
@@ -480,7 +603,7 @@ void App::tab_corners() {
             const auto& c = r.result.corner_speeds[k];
             ImGui::TableNextRow();
             const bool zero = s.is_corner() && !(c.v_max > 0);
-            if (zero) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(120, 80, 0, 120));
+            if (zero) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(color_highlight_row()));
             ImGui::TableSetColumnIndex(0); ImGui::Text("%zu", k + 1);
             ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(s.type == fsae::track::SegmentType::Straight ? "reta" : s.type == fsae::track::SegmentType::Left ? "esquerda" : "direita");
             ImGui::TableSetColumnIndex(2); ImGui::Text("%.2f", s.length);
@@ -534,7 +657,7 @@ void App::tab_compare() {
         if (ImPlot::BeginPlot("##dt")) {
             ImPlot::SetupAxes("Distância [m]", "Delta tempo [s]", 0, ImPlotAxisFlags_AutoFit);
             const double zero = 0;
-            ImPlot::SetNextLineStyle(kMuted, 1);
+            ImPlot::SetNextLineStyle(color_muted(), 1);
             ImPlot::PlotInfLines("##zero", &zero, 1, ImPlotInfLinesFlags_Horizontal);
             for (const auto& r : runs_) {
                 if (!r.visible || &r == &base) continue;

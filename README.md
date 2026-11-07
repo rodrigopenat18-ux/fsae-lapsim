@@ -52,6 +52,7 @@ Requisitos: compilador C++17, CMake ≥ 3.20 e Ninja. Na primeira compilação o
 as bibliotecas usadas, então é preciso internet:
 
 - [nlohmann/json](https://github.com/nlohmann/json), para ler o JSON do carro;
+- [miniz](https://github.com/richgel999/miniz), para ler planilhas do Excel (`.xlsx`);
 - [doctest](https://github.com/doctest/doctest), para os testes;
 - [GLFW](https://www.glfw.org), [Dear ImGui](https://github.com/ocornut/imgui) e
   [ImPlot](https://github.com/epezent/implot), para a interface.
@@ -92,27 +93,71 @@ Abra `fsae_gui.exe` com um duplo clique. Ele procura a pasta `data` (carros e pi
 subindo a partir da pasta do executável. Se copiar o `.exe` para outro lugar, leve a pasta
 `data` junto ou defina a variável de ambiente `FSAE_DATA_DIR`.
 
-**Painel da esquerda, de cima para baixo:**
+**Menus.**
 
-1. **Pista e prova:** escolha uma pista de `data/tracks` ou abra qualquer CSV
-   (os três formatos da seção [Pistas](#pistas)), a prova, o número de voltas e o
-   segmento de largada.
-2. **Simulação:**
-   - **Rodar simulação** (ou F5) guarda uma nova execução. Até 8 ficam guardadas, cada
-     uma com sua cor, para comparar setups.
+- **Arquivo:** novo carro, abrir e salvar carro, abrir pista e salvar os resultados.
+- **Carro:** editar os dados e importar curvas.
+- **Exibir:** tema claro ou escuro, que fica salvo junto com as outras preferências.
+- **Atalhos:** F5 roda a simulação, F2 abre os dados do carro e Ctrl+S salva o carro.
+
+**Painel da esquerda, aba Simulação:**
+
+1. **Carro:** qual está em uso. Os botões levam para a aba Carros ou abrem a edição.
+2. **Pista e prova:** escolha uma pista de `data/tracks` ou abra qualquer CSV (os três
+   formatos da seção [Pistas](#pistas)), a prova, o número de voltas e o segmento de
+   largada.
+3. **Rodar:**
+   - **Rodar simulação** (F5) guarda uma nova execução. Até 8 ficam guardadas, cada uma
+     com sua cor, para comparar setups.
    - **Atualizar automaticamente ao editar** refaz a última execução a cada alteração:
      mude o Cl·A ou uma relação de marcha e veja o tempo mudar na hora.
-3. **Resultado:** tempos de volta, máximos e consumo. **Salvar resultados** grava os mesmos
+4. **Resultado:** tempos de volta, máximos e consumo. **Salvar resultados** grava os mesmos
    arquivos da linha de comando (`telemetry.csv`, `summary.json`...).
-4. **Carro:** todos os parâmetros do `initializeCar.m`, agrupados e com unidade:
-   - massa, aerodinâmica, chassi e pneus;
-   - transmissão, com uma tabela de marchas;
-   - curvas de torque e BSFC, editáveis ponto a ponto;
-   - freio e ar.
 
-   Passe o mouse sobre um campo para ver o nome no MATLAB. **Abrir...** e
-   **Salvar como...** leem e gravam o JSON do carro. Valores inválidos aparecem em
-   vermelho e bloqueiam a simulação.
+**Painel da esquerda, aba Carros:**
+
+- **Novo**, **Duplicar** (para testar uma variação sem perder o original), **Abrir
+  arquivo...**, **Salvar** e **Salvar como...**.
+- A lista dos carros em `data/cars`: um clique carrega o carro. Se houver alterações não
+  salvas, o programa pergunta antes de trocar.
+- Um resumo do carro: massa, Cl·A/Cd·A, downforce a 100 km/h, atrito, marchas, torque e
+  potência máximos.
+
+**Dados do carro (F2).** Abre uma janela própria, que você pode mover e redimensionar, com
+uma aba por grupo:
+
+| Aba | Conteúdo |
+|---|---|
+| Geral | nome, massa do carro e do piloto, gravidade |
+| Aerodinâmica | área frontal, densidade do ar, Cl·A, Cd·A, centro de pressão, mais Cl, Cd e L/D calculados e o gráfico de downforce e arrasto pela velocidade |
+| Chassi e pneus | entre-eixos, raio do pneu, distribuição de peso, CG, bitolas e atritos |
+| Transmissão | reduções, eficiência, tempo de troca, rpm de largada e de redução, tabela de marchas e o gráfico de rotação × velocidade em cada marcha |
+| Motor | tabelas de torque e de BSFC, editáveis ponto a ponto, com os gráficos de torque e potência |
+| Freio e ar | parâmetros do modelo térmico do disco |
+
+Passe o mouse sobre um campo para ver o nome no MATLAB. Valores inválidos aparecem em
+vermelho e bloqueiam a simulação. **Desfazer alterações** volta ao último estado salvo.
+
+![Dados do carro: aba Motor](docs/img/gui_editor_motor.png)
+
+**Importar curvas.** Nas abas Transmissão e Motor (e no menu Carro), **Importar
+planilha...** aceita:
+
+- Excel `.xlsx`, escolhendo a planilha;
+- CSV ou TXT com separador `,`, `;` ou tabulação, decimal com ponto ou vírgula.
+
+**Colar do Excel** lê o que foi copiado com Ctrl+C.
+
+Na janela de importação:
+
+- escolha as colunas (rpm e torque, rpm e BSFC, ou relação e rpm de subida) e a unidade
+  (N·m, kgf·m ou lbf·ft; g/kWh ou lb/(hp·h));
+- confira a prévia: a tabela e a curva nova sobre a atual.
+
+Linhas de título acima do cabeçalho e colunas de texto são ignoradas. Rotações repetidas
+geram aviso.
+
+![Importação de uma curva de torque de um arquivo Excel](docs/img/gui_importar.png)
 
 **Abas de gráficos.** Em todas dá para escolher a volta (última, todas ou uma
 específica), dar zoom com a roda do mouse e arrastar.
@@ -120,17 +165,19 @@ específica), dar zoom com a roda do mouse e arrastar.
 | Aba | O que mostra |
 |---|---|
 | Telemetria | qualquer combinação de canais empilhados (velocidade, acelerações, rpm, marcha, forças, carga, temperatura e calor do disco, combustível) por tempo ou distância, para todas as execuções visíveis |
-| Mapa da pista | a pista colorida por qualquer canal; passe o mouse para ler o valor |
+| Mapa da pista | a pista colorida por qualquer canal. Dá para escolher o mapa de cores (Viridis, Turbo, Plasma, Jet, Hot, Cool, Vermelho-Azul, Espectral, Twilight, Cinzas...), inverter e mudar a espessura; passe o mouse para ler o valor |
 | Diagrama G-G | aceleração lateral × longitudinal |
 | Dispersão X-Y | qualquer canal contra qualquer outro |
-| Curvas | velocidade-limite × velocidade real em cada curva, e tabela dos segmentos com o que limitou cada curva |
+| Curvas | velocidade-limite × velocidade real em cada curva, e a tabela dos segmentos com o que limitou cada curva |
 | Comparação | velocidade e diferença de tempo acumulada ao longo da pista, em relação a uma execução de base |
-| Motor | torque, potência e BSFC do carro em edição, e rpm × velocidade em cada marcha |
+| Motor | torque, potência e BSFC do carro em edição, e rotação × velocidade em cada marcha |
 | Execuções | tabela com todas as execuções: renomear, esconder, salvar, remover ou copiar o carro de volta para o editor |
 
 ![Comparação entre dois setups (Cl·A +20%)](docs/img/gui_compara.png)
 
-![Mapa da pista colorido pela velocidade](docs/img/gui_mapa.png)
+![Mapa da pista com o mapa de cores Turbo](docs/img/gui_mapa.png)
+
+![Tema escuro: velocidade nas curvas](docs/img/gui_escuro_curvas.png)
 
 ## Uso rápido (linha de comando)
 

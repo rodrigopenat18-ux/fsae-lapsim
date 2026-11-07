@@ -1,5 +1,5 @@
 {
-  "name": "MATLAB initializeCar (padrao)",
+  "name": "MATLAB initializeCar (padrão)",
   "mass": {
     "car_kg": 220.0,
     "driver_kg": 75.0

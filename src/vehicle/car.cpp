@@ -22,7 +22,7 @@ void require_positive(double v, const char* name) {
 
 CarSpec CarSpec::matlab_default() {
     CarSpec s;  // os inicializadores da struct já são os valores do initializeCar.m
-    s.name = "MATLAB initializeCar (padrao)";
+    s.name = "MATLAB initializeCar (padrão)";
 
     // dataEngine.m
     s.engine_rpm = {4499,  4598,  4698,  4792,  4894,  5003,  5098,  5195,  5296,  5400,  5506,

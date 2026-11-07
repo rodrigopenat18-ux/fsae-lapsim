@@ -50,6 +50,9 @@ add_executable(fsae_gui WIN32
     main.cpp
     app.cpp
     plots.cpp
+    car_editor.cpp
+    import_dialog.cpp
+    theme.cpp
     platform.cpp)
 target_link_libraries(fsae_gui PRIVATE fsae::core fsae_imgui fsae_compile_options)
 if(NOT MSVC)

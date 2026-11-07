@@ -55,7 +55,7 @@ bool write_bmp(const std::string& path, int w, int h) {
 }
 
 void setup_style() {
-    ImGui::StyleColorsDark();
+    // Só tamanhos e cantos; as cores vêm do tema (theme.cpp).
     ImGuiStyle& s = ImGui::GetStyle();
     s.WindowRounding = 0;
     s.FrameRounding = 4;
@@ -64,14 +64,9 @@ void setup_style() {
     s.ChildRounding = 4;
     s.FramePadding = ImVec2(8, 5);
     s.ItemSpacing = ImVec2(8, 6);
-    s.Colors[ImGuiCol_WindowBg] = ImVec4(0.102f, 0.102f, 0.098f, 1.0f);  // #1a1a19
-    s.Colors[ImGuiCol_ChildBg] = ImVec4(0.12f, 0.12f, 0.115f, 1.0f);
-    ImPlot::StyleColorsDark();
-    ImPlotStyle& p = ImPlot::GetStyle();
-    p.LineWeight = 2.0f;
-    p.Colors[ImPlotCol_PlotBg] = ImVec4(0.102f, 0.102f, 0.098f, 1.0f);
-    p.Colors[ImPlotCol_FrameBg] = ImVec4(0, 0, 0, 0);
-    p.Colors[ImPlotCol_AxisGrid] = ImVec4(1, 1, 1, 0.08f);
+    s.WindowPadding = ImVec2(10, 10);
+    s.PopupRounding = 4;
+    s.WindowBorderSize = 1;
 }
 
 void load_font(float size) {
@@ -93,6 +88,8 @@ void load_font(float size) {
 int main(int argc, char** argv) {
     std::string screenshot, tab, track = "autox";
     bool demo_compare = false;
+    std::string theme, left_tab, editor_tab, demo_import, cmap;
+    bool cmap_invert = false;
     int width = 1600, height = 950;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -100,6 +97,12 @@ int main(int argc, char** argv) {
         else if (a == "--tab" && i + 1 < argc) tab = argv[++i];
         else if (a == "--track" && i + 1 < argc) track = argv[++i];
         else if (a == "--demo-compare") demo_compare = true;
+        else if (a == "--theme" && i + 1 < argc) theme = argv[++i];
+        else if (a == "--left-tab" && i + 1 < argc) left_tab = argv[++i];
+        else if (a == "--editor" && i + 1 < argc) editor_tab = argv[++i];
+        else if (a == "--demo-import" && i + 1 < argc) demo_import = argv[++i];
+        else if (a == "--map-colormap" && i + 1 < argc) cmap = argv[++i];
+        else if (a == "--map-invert") cmap_invert = true;
         else if (a == "--size" && i + 2 < argc) {
             width = std::atoi(argv[++i]);
             height = std::atoi(argv[++i]);
@@ -134,9 +137,13 @@ int main(int argc, char** argv) {
 
     fsae::gui::App app;
     if (!screenshot.empty()) {
+        app.set_persist(false);  // capturas não mexem nas preferências do usuário
+        if (!theme.empty()) app.set_theme(theme == "dark" ? fsae::gui::Theme::Dark : fsae::gui::Theme::Light);
         app.load_track_by_name(track);
         app.run_now();
         if (demo_compare) app.demo_second_run();
+        if (!demo_import.empty()) app.demo_import(demo_import);
+        if (!cmap.empty()) app.set_map_colormap(cmap, cmap_invert);
     }
 
     int frames = 0;
@@ -146,7 +153,11 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        if (!tab.empty() && frames < 2) app.select_tab(tab);
+        if (frames < 2) {
+            if (!tab.empty()) app.select_tab(tab);
+            if (!left_tab.empty()) app.select_left_tab(left_tab);
+            if (!editor_tab.empty()) app.open_editor(editor_tab);
+        }
         app.frame();
         ImGui::Render();
         int w = 0, h = 0;

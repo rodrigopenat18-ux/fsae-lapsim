@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdio>
 #include <exception>
+#include <fstream>
+#include <sstream>
 
 #include <imgui.h>
 #include <implot.h>
@@ -12,6 +14,7 @@
 
 #include "fsae/io/car_json.hpp"
 #include "fsae/io/results.hpp"
+#include "fsae/version.hpp"
 #include "platform.hpp"
 
 namespace fs = std::filesystem;
@@ -22,46 +25,9 @@ namespace {
 
 constexpr int kMaxRuns = 8;
 
-/// Paleta categórica (instância de referência, passos para fundo escuro), em ordem fixa.
-/// A cor segue a execução: uma execução nunca troca de cor quando outra é removida.
-constexpr std::array<std::uint32_t, kMaxRuns> kRunColors = {
-    0x3987e5, 0xd95926, 0x199e70, 0xc98500, 0xd55181, 0x008300, 0x9085e9, 0xe66767};
-
-ImVec4 hex(std::uint32_t c, float a = 1.0f) {
-    auto ch = [c](int shift) { return static_cast<float>(static_cast<int>((c >> shift) & 0xffu)) / 255.0f; };
-    return ImVec4(ch(16), ch(8), ch(0), a);
-}
-
 const char* const kEvents[] = {"Autocross", "Skidpad", "Aceleração", "Pista customizada"};
 constexpr fsae::sim::Event kEventValues[] = {fsae::sim::Event::Autocross, fsae::sim::Event::Skidpad,
                                              fsae::sim::Event::Acceleration, fsae::sim::Event::Custom};
-
-// --- Ajudantes de formulário (tabela de 2 colunas: rótulo | campo) ---
-
-bool begin_form(const char* id) {
-    if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp)) return false;
-    ImGui::TableSetupColumn("rotulo", ImGuiTableColumnFlags_WidthStretch, 1.25f);
-    ImGui::TableSetupColumn("valor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-    return true;
-}
-
-void row_label(const char* label, const char* tip) {
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(label);
-    if (tip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
-    ImGui::TableSetColumnIndex(1);
-    ImGui::SetNextItemWidth(-FLT_MIN);
-}
-
-bool num(const char* label, double& v, const char* tip = nullptr, const char* fmt = "%.6g") {
-    row_label(label, tip);
-    ImGui::PushID(label);
-    const bool changed = ImGui::InputDouble("##v", &v, 0.0, 0.0, fmt);
-    ImGui::PopID();
-    return changed;
-}
 
 std::string sanitize(std::string s) {
     for (char& c : s) {
@@ -70,11 +36,16 @@ std::string sanitize(std::string s) {
     return s;
 }
 
-/// Carrega o tipo de prova a partir do nome do arquivo, como a CLI.
 int event_for_track(const std::string& name) {
     if (name == "skidpad") return 1;
     if (name == "acceleration") return 2;
     return 0;
+}
+
+std::vector<double> scaled(const std::vector<double>& v, double k) {
+    std::vector<double> out(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) out[i] = v[i] * k;
+    return out;
 }
 
 }  // namespace
@@ -119,12 +90,6 @@ int channel_index(const char* key) {
 
 namespace {
 
-std::vector<double> scaled(const std::vector<double>& v, double k) {
-    std::vector<double> out(v.size());
-    for (std::size_t i = 0; i < v.size(); ++i) out[i] = v[i] * k;
-    return out;
-}
-
 std::vector<std::vector<double>> build_channels(const fsae::sim::Telemetry& h) {
     std::vector<std::vector<double>> c;
     c.reserve(channels().size());
@@ -157,24 +122,63 @@ std::vector<std::vector<double>> build_channels(const fsae::sim::Telemetry& h) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// App
+// Construção, preferências
 // ---------------------------------------------------------------------------
 
 App::App() {
     spec_ = fsae::CarSpec::matlab_default();
+    mark_car_saved();
     for (const char* k : {"velocity", "acceleration", "lateral_accel", "rpm", "gear"}) {
         tel_selected_[static_cast<std::size_t>(channel_index(k))] = true;
     }
     map_channel_ = channel_index("velocity");
     xy_x_ = channel_index("velocity");
     xy_y_ = channel_index("rpm");
+    load_settings();
+    apply_theme(theme_);
     refresh_lists();
     load_track_by_name("autox");
     validate_car();
 }
 
-ImVec4 App::run_color(const Run& r) const {
-    return hex(kRunColors[static_cast<std::size_t>(r.color_slot) % kRunColors.size()]);
+App::~App() {
+    if (persist_) save_settings();
+}
+
+void App::set_theme(Theme t) {
+    theme_ = t;
+    apply_theme(t);
+}
+
+void App::load_settings() {
+    std::ifstream in(settings_path());
+    std::string line;
+    while (std::getline(in, line)) {
+        const auto eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+        if (k == "theme") theme_ = v == "dark" ? Theme::Dark : Theme::Light;
+        else if (k == "map_colormap") {
+            for (int i = 0; i < colormap_count(); ++i) {
+                if (v == colormap_name(i)) map_cmap_ = i;
+            }
+        } else if (k == "map_invert") map_invert_ = v == "1";
+        else if (k == "map_width") map_width_ = std::clamp(static_cast<float>(std::atof(v.c_str())), 2.0f, 20.0f);
+        else if (k == "auto_run") auto_run_ = v == "1";
+    }
+}
+
+void App::save_settings() const {
+    std::error_code ec;
+    const fs::path p = settings_path();
+    fs::create_directories(p.parent_path(), ec);
+    std::ofstream out(p);
+    if (!out) return;
+    out << "theme=" << (theme_ == Theme::Dark ? "dark" : "light") << "\n"
+        << "map_colormap=" << colormap_name(map_cmap_) << "\n"
+        << "map_invert=" << (map_invert_ ? 1 : 0) << "\n"
+        << "map_width=" << map_width_ << "\n"
+        << "auto_run=" << (auto_run_ ? 1 : 0) << "\n";
 }
 
 void App::refresh_lists() {
@@ -193,7 +197,162 @@ void App::refresh_lists() {
     }
     std::sort(track_files_.begin(), track_files_.end());
     std::sort(car_files_.begin(), car_files_.end());
+    car_names_.clear();
+    for (const auto& p : car_files_) {
+        try {
+            car_names_.push_back(fsae::io::load_car_spec(p).name);
+        } catch (const std::exception&) {
+            car_names_.push_back("(arquivo inválido)");
+        }
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Carro
+// ---------------------------------------------------------------------------
+
+void App::validate_car() {
+    try {
+        (void)fsae::Car::from_spec(spec_);
+        car_valid_ = true;
+        car_error_.clear();
+    } catch (const std::exception& e) {
+        car_valid_ = false;
+        car_error_ = e.what();
+    }
+}
+
+bool App::car_modified() const { return fsae::io::car_spec_to_json(spec_) != saved_json_; }
+
+void App::mark_car_saved() { saved_json_ = fsae::io::car_spec_to_json(spec_); }
+
+void App::on_car_changed() {
+    validate_car();
+    ++view_gen_;
+    if (auto_run_ && car_valid_ && !track_.segments.empty()) run_simulation(!runs_.empty());
+}
+
+void App::request_car_action(CarAction a, const fs::path& p) {
+    if (a != CarAction::Duplicate && car_modified()) {
+        pending_action_ = a;
+        pending_path_ = p;
+        open_discard_modal_ = true;
+        return;
+    }
+    do_car_action(a, p);
+}
+
+void App::do_car_action(CarAction a, const fs::path& p) {
+    switch (a) {
+        case CarAction::None: return;
+        case CarAction::New:
+            spec_ = fsae::CarSpec::matlab_default();
+            spec_.name = "Novo carro";
+            car_file_.clear();
+            saved_json_.clear();  // ainda não salvo
+            show_editor_ = true;
+            forced_editor_tab_ = "Geral";
+            status_ = "Novo carro criado a partir do carro padrão. Edite os dados e salve.";
+            break;
+        case CarAction::Default:
+            spec_ = fsae::CarSpec::matlab_default();
+            car_file_.clear();
+            mark_car_saved();
+            status_ = "Carro padrão (initializeCar.m) carregado.";
+            break;
+        case CarAction::Load:
+            try {
+                spec_ = fsae::io::load_car_spec(p);
+                car_file_ = to_utf8(p);
+                mark_car_saved();
+                status_ = "Carro carregado: " + to_utf8(p.filename());
+            } catch (const std::exception& e) {
+                status_ = std::string("Erro ao abrir o carro: ") + e.what();
+            }
+            break;
+        case CarAction::Duplicate:
+            spec_.name += " (cópia)";
+            car_file_.clear();
+            saved_json_.clear();
+            status_ = "Cópia criada. Salve com \"Salvar como...\" para guardá-la.";
+            break;
+    }
+    on_car_changed();
+}
+
+void App::confirm_discard_modal() {
+    if (open_discard_modal_) {
+        ImGui::OpenPopup("Descartar alterações?");
+        open_discard_modal_ = false;
+    }
+    if (ImGui::BeginPopupModal("Descartar alterações?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("O carro \"%s\" tem alterações que não foram salvas.", spec_.name.c_str());
+        ImGui::Spacing();
+        if (primary_button("Salvar e continuar")) {
+            if (save_car(false)) {
+                do_car_action(pending_action_, pending_path_);
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Descartar")) {
+            do_car_action(pending_action_, pending_path_);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancelar")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+bool App::save_car(bool save_as) {
+    fs::path target = car_file_.empty() ? fs::path() : fs::u8path(car_file_);
+    if (save_as || target.empty()) {
+        const std::string def = sanitize(spec_.name) + ".json";
+        auto p = save_file_dialog("Salvar carro", "Carro JSON", "*.json", def.c_str());
+        if (!p) {
+            // Sem diálogo (fora do Windows): grava em data/cars
+            const auto dir = find_data_subdir("cars");
+            if (dir.empty() || !save_as) return false;
+            p = dir / def;
+        }
+        target = *p;
+    }
+    try {
+        fsae::io::save_car_spec(spec_, target);
+        car_file_ = to_utf8(target);
+        mark_car_saved();
+        refresh_lists();
+        status_ = "Carro salvo em " + car_file_;
+        return true;
+    } catch (const std::exception& e) {
+        status_ = std::string("Erro ao salvar: ") + e.what();
+        return false;
+    }
+}
+
+void App::open_car_dialog() {
+    if (auto p = open_file_dialog("Abrir carro", "Carro JSON", "*.json")) request_car_action(CarAction::Load, *p);
+}
+
+void App::import_from_file(ImportTarget t) {
+    if (auto p = open_file_dialog("Importar dados", "Planilhas e CSV", "*.xlsx;*.xlsm;*.csv;*.txt")) {
+        import_.open_file(t, *p);
+    }
+}
+
+void App::import_from_clipboard(ImportTarget t) {
+    const char* text = ImGui::GetClipboardText();
+    if (!text || !*text) {
+        status_ = "A área de transferência está vazia. Copie as colunas no Excel (Ctrl+C) e tente de novo.";
+        return;
+    }
+    import_.open_text(t, text);
+}
+
+// ---------------------------------------------------------------------------
+// Pista
+// ---------------------------------------------------------------------------
 
 void App::load_track_by_name(const std::string& name) {
     for (const auto& p : track_files_) {
@@ -218,28 +377,13 @@ void App::load_track(const fs::path& p) {
     }
 }
 
-void App::load_car(const fs::path& p) {
-    try {
-        spec_ = fsae::io::load_car_spec(p);
-        car_file_ = to_utf8(p);
-        validate_car();
-        status_ = "Carro carregado: " + car_file_;
-    } catch (const std::exception& e) {
-        car_error_ = e.what();
-        car_valid_ = false;
-    }
+void App::open_track_dialog() {
+    if (auto p = open_file_dialog("Abrir pista", "Pista CSV", "*.csv")) load_track(*p);
 }
 
-void App::validate_car() {
-    try {
-        (void)fsae::Car::from_spec(spec_);
-        car_valid_ = true;
-        car_error_.clear();
-    } catch (const std::exception& e) {
-        car_valid_ = false;
-        car_error_ = e.what();
-    }
-}
+// ---------------------------------------------------------------------------
+// Simulação
+// ---------------------------------------------------------------------------
 
 Run* App::current_run() { return runs_.empty() ? nullptr : &runs_.back(); }
 
@@ -247,6 +391,13 @@ int App::max_laps() const {
     int n = 1;
     for (const auto& r : runs_) n = std::max(n, r.result.laps);
     return n;
+}
+
+bool App::needs_fit(int tab) {
+    auto& seen = fitted_gen_[static_cast<std::size_t>(tab)];
+    if (seen == view_gen_) return false;
+    seen = view_gen_;
+    return true;
 }
 
 void App::run_simulation(bool replace_last) {
@@ -306,7 +457,6 @@ void App::run_simulation(bool replace_last) {
             runs_.push_back(std::move(r));
         }
         ++view_gen_;
-        status_.clear();
     } catch (const std::exception& e) {
         run_error_ = e.what();
     }
@@ -338,6 +488,8 @@ void App::save_results(const Run& r) {
 // ---------------------------------------------------------------------------
 
 void App::frame() {
+    menu_bar();
+
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
     ImGui::SetNextWindowSize(vp->WorkSize);
@@ -345,9 +497,30 @@ void App::frame() {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings);
 
-    const float left_w = std::max(380.0f, vp->WorkSize.x * 0.27f);
+    const float left_w = std::max(380.0f, vp->WorkSize.x * 0.26f);
     ImGui::BeginChild("esquerda", ImVec2(left_w, 0), ImGuiChildFlags_Border);
-    panel_setup();
+    if (ImGui::BeginTabBar("painel")) {
+        const auto flag = [&](const char* name) {
+            return !forced_left_tab_.empty() && std::string(name).rfind(forced_left_tab_, 0) == 0
+                       ? ImGuiTabItemFlags_SetSelected
+                       : 0;
+        };
+        if (ImGui::BeginTabItem("Simulação", nullptr, flag("Simulação"))) {
+            ImGui::BeginChild("sim_scroll");
+            panel_simulation();
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        const std::string cars_tab = std::string("Carros") + (car_modified() ? " *" : "") + "###carros";
+        if (ImGui::BeginTabItem(cars_tab.c_str(), nullptr, flag("Carros"))) {
+            ImGui::BeginChild("car_scroll");
+            panel_cars();
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    forced_left_tab_.clear();
     ImGui::EndChild();
     ImGui::SameLine();
     ImGui::BeginChild("direita", ImVec2(0, 0), ImGuiChildFlags_None);
@@ -373,18 +546,103 @@ void App::frame() {
     forced_tab_.clear();
     ImGui::EndChild();
     ImGui::End();
+
+    car_editor_window();
+    confirm_discard_modal();
+    if (import_.draw(spec_)) {
+        status_ = "Dados importados para o carro \"" + spec_.name + "\".";
+        on_car_changed();
+    }
 }
 
-void App::panel_setup() {
-    bool changed = false;
+void App::menu_bar() {
+    if (!ImGui::BeginMainMenuBar()) return;
+    if (ImGui::BeginMenu("Arquivo")) {
+        if (ImGui::MenuItem("Novo carro")) request_car_action(CarAction::New);
+        if (ImGui::MenuItem("Abrir carro...")) open_car_dialog();
+        if (ImGui::MenuItem("Salvar carro", "Ctrl+S")) save_car(false);
+        if (ImGui::MenuItem("Salvar carro como...")) save_car(true);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Abrir pista...")) open_track_dialog();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Salvar resultados da execução atual", nullptr, false, !runs_.empty())) {
+            save_results(runs_.back());
+        }
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Carro")) {
+        if (ImGui::MenuItem("Editar dados do carro...", "F2")) show_editor_ = true;
+        if (ImGui::MenuItem("Importar curva de torque...")) import_from_file(ImportTarget::Torque);
+        if (ImGui::MenuItem("Importar BSFC...")) import_from_file(ImportTarget::Bsfc);
+        if (ImGui::MenuItem("Importar relações de marcha...")) import_from_file(ImportTarget::Gears);
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Exibir")) {
+        if (ImGui::MenuItem("Tema claro", nullptr, theme_ == Theme::Light)) set_theme(Theme::Light);
+        if (ImGui::MenuItem("Tema escuro", nullptr, theme_ == Theme::Dark)) set_theme(Theme::Dark);
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Ajuda")) {
+        ImGui::Text("FSAE Lap Simulator %s", std::string(fsae::version()).c_str());
+        ImGui::TextDisabled("Port C++ do simulador MATLAB da equipe (resultados idênticos).");
+        ImGui::TextDisabled("F5: rodar simulação   F2: editar carro   Ctrl+S: salvar carro");
+        ImGui::EndMenu();
+    }
+    // Carro ativo à direita da barra
+    const std::string active = "Carro: " + spec_.name + (car_modified() ? " (não salvo)" : "");
+    ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(active.c_str()).x - 20);
+    ImGui::TextDisabled("%s", active.c_str());
+    ImGui::EndMainMenuBar();
+
+    const ImGuiIO& io = ImGui::GetIO();
+    if (ImGui::IsKeyPressed(ImGuiKey_F2)) show_editor_ = true;
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) save_car(false);
+}
+
+// ---------------------------------------------------------------------------
+// Painel "Simulação"
+// ---------------------------------------------------------------------------
+
+namespace {
+
+bool begin_form(const char* id) {
+    if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp)) return false;
+    ImGui::TableSetupColumn("rotulo", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+    ImGui::TableSetupColumn("valor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    return true;
+}
+
+void row_label(const char* label, const char* tip) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    if (tip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+    ImGui::TableSetColumnIndex(1);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+}
+
+}  // namespace
+
+void App::panel_simulation() {
+    ImGui::SeparatorText("Carro");
+    ImGui::TextUnformatted(spec_.name.c_str());
+    if (car_modified()) {
+        ImGui::SameLine();
+        ImGui::TextColored(color_warning(), "(não salvo)");
+    }
+    if (ImGui::Button("Trocar carro")) forced_left_tab_ = "Carros";
+    ImGui::SameLine();
+    if (ImGui::Button("Editar dados...")) show_editor_ = true;
+    if (!car_valid_) ImGui::TextColored(color_error(), "%s", car_error_.c_str());
 
     ImGui::SeparatorText("Pista e prova");
-    changed |= track_selector();
+    bool changed = track_selector();
 
-    ImGui::SeparatorText("Simulação");
+    ImGui::SeparatorText("Rodar");
     ImGui::BeginDisabled(!car_valid_ || track_.segments.empty());
-    if (ImGui::Button("Rodar simulação", ImVec2(-FLT_MIN, 36)) ||
-        (ImGui::IsKeyPressed(ImGuiKey_F5) && car_valid_)) {
+    if (primary_button("Rodar simulação  (F5)", ImVec2(-FLT_MIN, 38)) ||
+        (ImGui::IsKeyPressed(ImGuiKey_F5) && car_valid_ && !track_.segments.empty())) {
         run_simulation(false);
     }
     ImGui::EndDisabled();
@@ -400,207 +658,14 @@ void App::panel_setup() {
             ++view_gen_;
         }
     }
-    if (!run_error_.empty()) ImGui::TextColored(hex(0xe66767), "%s", run_error_.c_str());
+    if (!run_error_.empty()) ImGui::TextColored(color_error(), "%s", run_error_.c_str());
 
     panel_results();
-    if (!status_.empty()) ImGui::TextWrapped("%s", status_.c_str());
-
-    ImGui::SeparatorText("Carro");
-    changed |= car_editor();
-
-    if (changed) {
-        ++view_gen_;
-        validate_car();
-        if (auto_run_ && car_valid_ && !track_.segments.empty()) run_simulation(!runs_.empty());
+    if (!status_.empty()) {
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", status_.c_str());
     }
-}
-
-bool App::needs_fit(int tab) {
-    auto& seen = fitted_gen_[static_cast<std::size_t>(tab)];
-    if (seen == view_gen_) return false;
-    seen = view_gen_;
-    return true;
-}
-
-bool App::car_editor() {
-    bool ch = false;
-    auto& s = spec_;
-
-    // Arquivo
-    const std::string current = car_file_.empty() ? "(padrão do MATLAB)" : fs::path(car_file_).filename().string();
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    if (ImGui::BeginCombo("##carro", current.c_str())) {
-        if (ImGui::Selectable("Carro padrão (initializeCar.m)")) {
-            spec_ = fsae::CarSpec::matlab_default();
-            car_file_.clear();
-            ch = true;
-        }
-        for (const auto& p : car_files_) {
-            if (ImGui::Selectable(p.filename().string().c_str())) {
-                load_car(p);
-                ch = true;
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (ImGui::Button("Abrir...")) {
-        if (auto p = open_file_dialog("Abrir carro", "Carro JSON", "*.json")) {
-            load_car(*p);
-            ch = true;
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Salvar como...")) {
-        const std::string def = sanitize(s.name) + ".json";
-        if (auto p = save_file_dialog("Salvar carro", "Carro JSON", "*.json", def.c_str())) {
-            try {
-                fsae::io::save_car_spec(s, *p);
-                car_file_ = to_utf8(*p);
-                status_ = "Carro salvo em " + car_file_;
-                refresh_lists();
-            } catch (const std::exception& e) {
-                status_ = e.what();
-            }
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Restaurar padrão")) {
-        spec_ = fsae::CarSpec::matlab_default();
-        car_file_.clear();
-        ch = true;
-    }
-
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    ch |= ImGui::InputTextWithHint("##nome", "nome do carro", &s.name);
-
-    if (ImGui::CollapsingHeader("Massa", ImGuiTreeNodeFlags_DefaultOpen) && begin_form("massa")) {
-        ch |= num("Carro [kg]", s.car_mass_kg, "mass_only");
-        ch |= num("Piloto [kg]", s.driver_mass_kg, "pilot_mass");
-        ch |= num("Gravidade [m/s²]", s.gravity_m_s2, "g");
-        ImGui::EndTable();
-    }
-    if (ImGui::CollapsingHeader("Aerodinâmica", ImGuiTreeNodeFlags_DefaultOpen) && begin_form("aero")) {
-        ch |= num("Área frontal [m²]", s.frontal_area_m2, "frontalArea");
-        ch |= num("Densidade do ar [kg/m³]", s.air_density_kg_m3, "rho");
-        ch |= num("Cl*A [m²]", s.cl_a_m2, "Coeficiente de sustentação vezes área (cl = ClA / A)");
-        ch |= num("Cd*A [m²]", s.cd_a_m2, "Coeficiente de arrasto vezes área (cd = CdA / A)");
-        ch |= num("Centro de pressão [% traseira]", s.center_of_pressure_rear_percent, "cpaero");
-        ImGui::EndTable();
-    }
-    if (ImGui::CollapsingHeader("Chassi e pneus", ImGuiTreeNodeFlags_DefaultOpen) && begin_form("chassi")) {
-        ch |= num("Entre-eixos [m]", s.wheelbase_m, "wheelbase");
-        ch |= num("Raio do pneu [mm]", s.tire_radius_mm, "tire_radius");
-        ch |= num("Distribuição de peso [% traseira]", s.weight_dist_rear_percent, "weight_dist_rear_percent");
-        ch |= num("Altura do CG [m]", s.cg_height_m, "cg_height");
-        ch |= num("Bitola dianteira [m]", s.track_front_m, "track_front_m");
-        ch |= num("Bitola traseira [m]", s.track_rear_m, "track_rear_m");
-        ch |= num("Atrito longitudinal estático", s.mu_x_static, "mux_static");
-        ch |= num("Atrito longitudinal cinético", s.mu_x_kinetic, "mux_kinetic (quando a roda patina)");
-        ch |= num("Atrito lateral", s.mu_y, "muy");
-        ImGui::EndTable();
-    }
-    if (ImGui::CollapsingHeader("Transmissão") ) {
-        if (begin_form("trans")) {
-            ch |= num("Redução primária", s.primary_reduction);
-            ch |= num("Redução final", s.final_drive);
-            ch |= num("Eficiência", s.powertrain_efficiency, "powertrain_efficiency (0 a 1)");
-            ch |= num("Tempo de troca [ms]", s.shift_time_ms, "shiftTime");
-            ch |= num("RPM de largada (two-step)", s.launch_rpm, "launchRPM");
-            ch |= num("RPM de redução", s.downshift_rpm, "downshiftRPM");
-            row_label("Número de marchas", nullptr);
-            int n = static_cast<int>(s.gear_ratios.size());
-            if (ImGui::InputInt("##nmarchas", &n) && n >= 1 && n <= 10) {
-                const double last_ratio = s.gear_ratios.empty() ? 1.0 : s.gear_ratios.back();
-                const double last_rpm = s.upshift_rpm.empty() ? 12000.0 : s.upshift_rpm.back();
-                s.gear_ratios.resize(static_cast<std::size_t>(n), last_ratio);
-                s.upshift_rpm.resize(static_cast<std::size_t>(n), last_rpm);
-                ch = true;
-            }
-            ImGui::EndTable();
-        }
-        if (ImGui::BeginTable("marchas", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-            ImGui::TableSetupColumn("Marcha", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Relação");
-            ImGui::TableSetupColumn("RPM de subida");
-            ImGui::TableHeadersRow();
-            for (std::size_t g = 0; g < s.gear_ratios.size(); ++g) {
-                ImGui::PushID(static_cast<int>(g));
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%zu", g + 1);
-                ImGui::TableSetColumnIndex(1);
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                ch |= ImGui::InputDouble("##r", &s.gear_ratios[g], 0, 0, "%.4g");
-                ImGui::TableSetColumnIndex(2);
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                if (g < s.upshift_rpm.size()) ch |= ImGui::InputDouble("##u", &s.upshift_rpm[g], 0, 0, "%.0f");
-                ImGui::PopID();
-            }
-            ImGui::EndTable();
-        }
-    }
-    if (ImGui::CollapsingHeader("Motor (curvas)")) {
-        auto table = [&](const char* id, const char* cx, const char* cy, std::vector<double>& x,
-                         std::vector<double>& y) {
-            ImGui::PushID(id);
-            if (ImGui::BeginTable("t", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                              ImGuiTableFlags_ScrollY,
-                                  ImVec2(0, 200))) {
-                ImGui::TableSetupScrollFreeze(0, 1);
-                ImGui::TableSetupColumn(cx);
-                ImGui::TableSetupColumn(cy);
-                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 24);
-                ImGui::TableHeadersRow();
-                std::size_t remove = x.size();
-                for (std::size_t i = 0; i < x.size() && i < y.size(); ++i) {
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    ch |= ImGui::InputDouble("##x", &x[i], 0, 0, "%.6g");
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    ch |= ImGui::InputDouble("##y", &y[i], 0, 0, "%.6g");
-                    ImGui::TableSetColumnIndex(2);
-                    if (ImGui::SmallButton("x")) remove = i;
-                    ImGui::PopID();
-                }
-                ImGui::EndTable();
-                if (remove < x.size() && x.size() > 2) {
-                    x.erase(x.begin() + static_cast<std::ptrdiff_t>(remove));
-                    y.erase(y.begin() + static_cast<std::ptrdiff_t>(remove));
-                    ch = true;
-                }
-            }
-            if (ImGui::SmallButton("+ ponto")) {
-                const double nx = x.empty() ? 1000 : x.back() + (x.size() > 1 ? x.back() - x[x.size() - 2] : 500);
-                x.push_back(nx);
-                y.push_back(y.empty() ? 0 : y.back());
-                ch = true;
-            }
-            ImGui::PopID();
-        };
-        ImGui::TextDisabled("Torque (interpolação pchip, como o dataEngine.m)");
-        table("torque", "rpm", "Torque [N.m]", s.engine_rpm, s.engine_torque_nm);
-        ImGui::TextDisabled("Consumo específico (BSFC, interpolação linear)");
-        table("bsfc", "rpm", "BSFC [g/kWh]", s.bsfc_rpm, s.bsfc_g_kwh);
-    }
-    if (ImGui::CollapsingHeader("Freio e ar") && begin_form("freio")) {
-        ch |= num("Massa do disco [kg]", s.brake_disc_mass_kg, "brake_mass");
-        ch |= num("Diâmetro do disco [m]", s.brake_disc_diameter_m, "brake_diameter");
-        ch |= num("Área exposta do disco [m²]", s.brake_disc_surface_area_m2, "brake_surface_area");
-        ch |= num("Condutividade do disco [W/m.K]", s.brake_disc_thermal_conductivity_w_mk, "brake_thermalcond");
-        ch |= num("Emissividade do disco", s.brake_disc_emissivity, "brake_emissivity");
-        ch |= num("Número de bobbins", s.brake_bobbin_count);
-        ch |= num("Diâmetro do bobbin [m]", s.brake_bobbin_diameter_m);
-        ch |= num("Distância de condução [m]", s.brake_conduction_distance_m, "brake_cond_dist");
-        ch |= num("Condutividade do ar [W/m.K]", s.air_thermal_conductivity_w_mk, "air_k");
-        ch |= num("Viscosidade do ar [Pa.s]", s.air_dynamic_viscosity_pa_s, "air_mu", "%.4g");
-        ImGui::EndTable();
-    }
-    if (ch) validate_car();
-    if (!car_valid_) ImGui::TextColored(hex(0xe66767), "%s", car_error_.c_str());
-    return ch;
+    if (changed) on_car_changed();
 }
 
 bool App::track_selector() {
@@ -617,22 +682,19 @@ bool App::track_selector() {
         ImGui::EndCombo();
     }
     if (ImGui::Button("Abrir pista...")) {
-        if (auto p = open_file_dialog("Abrir pista", "Pista CSV", "*.csv")) {
-            load_track(*p);
-            ch = true;
-        }
+        open_track_dialog();
+        ch = true;
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Formatos: CSV do projeto, matriz segments do MATLAB\n"
                           "(index,length,radius,slope,type) ou Tipo;Comprimento;Raio do trackExcel.");
     }
-    if (!track_error_.empty()) ImGui::TextColored(hex(0xe66767), "%s", track_error_.c_str());
+    if (!track_error_.empty()) ImGui::TextColored(color_error(), "%s", track_error_.c_str());
     if (!track_.segments.empty()) {
         std::size_t corners = 0;
         for (const auto& sg : track_.segments) corners += sg.is_corner() ? 1 : 0;
         ImGui::SameLine();
-        ImGui::TextDisabled("%zu segmentos, %zu curvas, %.1f m", track_.segments.size(), corners,
-                            track_.length());
+        ImGui::TextDisabled("%zu segmentos, %zu curvas, %.1f m", track_.segments.size(), corners, track_.length());
     }
     if (begin_form("prova")) {
         row_label("Prova", "Define o número padrão de voltas");
@@ -659,12 +721,12 @@ bool App::track_selector() {
 
 void App::panel_results() {
     Run* r = current_run();
+    ImGui::SeparatorText("Resultado");
     if (!r) {
         ImGui::TextDisabled("Nenhuma execução ainda. Clique em \"Rodar simulação\".");
         return;
     }
     const auto& res = r->result;
-    ImGui::SeparatorText("Resultado");
     ImGui::ColorButton("##cor", run_color(*r), ImGuiColorEditFlags_NoTooltip, ImVec2(14, 14));
     ImGui::SameLine();
     ImGui::TextUnformatted(r->label.c_str());
@@ -692,7 +754,7 @@ void App::panel_results() {
         ImGui::EndTable();
     }
     if (!r->zero_speed_corners.empty()) {
-        ImGui::TextColored(hex(0xc98500),
+        ImGui::TextColored(color_warning(),
                            "AVISO: %zu curva(s) com velocidade máxima 0 (raio grande).\n"
                            "O modelo do MATLAB zera a aderência acima de ~136,5 m\n"
                            "(KNOWN_ISSUES, item 2): o tempo de volta não é confiável.",
@@ -705,40 +767,53 @@ void App::panel_results() {
     }
 }
 
-Series App::series(const Run& r, int channel, int lap, bool x_is_distance) const {
-    Series s;
-    const auto& y = r.channels[static_cast<std::size_t>(channel)];
-    const auto& t = r.channels[0];
-    const auto& d = r.channels[1];
-    const int k = lap < 0 ? r.result.laps : lap;
-    if (k > r.result.laps) return s;
-    double t0 = 0, d0 = 0;
-    bool first = true;
-    for (std::size_t i = 0; i < y.size(); ++i) {
-        if (k > 0 && r.lap[i] != k) continue;
-        if (first && k > 1) {
-            t0 = t[i];
-            d0 = static_cast<double>(k - 1) * r.result.track_length;
-        }
-        first = false;
-        s.x.push_back(x_is_distance ? d[i] - d0 : t[i] - t0);
-        // Os próprios canais de tempo e distância também começam em zero na volta.
-        s.y.push_back(channel == 0 ? y[i] - t0 : channel == 1 ? y[i] - d0 : y[i]);
-    }
-    return s;
-}
+// ---------------------------------------------------------------------------
+// Painel "Carros"
+// ---------------------------------------------------------------------------
 
-Series App::series_xy(const Run& r, int cx, int cy, int lap) const {
-    Series s;
-    const auto& x = r.channels[static_cast<std::size_t>(cx)];
-    const auto& y = r.channels[static_cast<std::size_t>(cy)];
-    const int k = lap < 0 ? r.result.laps : lap;
-    for (std::size_t i = 0; i < y.size(); ++i) {
-        if (k > 0 && r.lap[i] != k) continue;
-        s.x.push_back(x[i]);
-        s.y.push_back(y[i]);
+void App::panel_cars() {
+    ImGui::SeparatorText("Carro ativo");
+    ImGui::TextUnformatted(spec_.name.c_str());
+    ImGui::TextDisabled("%s", car_file_.empty() ? "(ainda não salvo em arquivo)" : to_utf8(fs::u8path(car_file_).filename()).c_str());
+    if (car_modified()) ImGui::TextColored(color_warning(), "Alterações não salvas");
+
+    if (primary_button("Editar dados do carro...  (F2)", ImVec2(-FLT_MIN, 36))) show_editor_ = true;
+    const float w = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2) / 3;
+    if (ImGui::Button("Novo", ImVec2(w, 0))) request_car_action(CarAction::New);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Começa um carro novo a partir dos valores do carro padrão.");
+    ImGui::SameLine();
+    if (ImGui::Button("Duplicar", ImVec2(w, 0))) request_car_action(CarAction::Duplicate);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cria uma cópia do carro ativo para testar variações.");
+    ImGui::SameLine();
+    if (ImGui::Button("Abrir arquivo...", ImVec2(w, 0))) open_car_dialog();
+    const float w2 = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2;
+    ImGui::BeginDisabled(!car_modified() && !car_file_.empty());
+    if (ImGui::Button("Salvar", ImVec2(w2, 0))) save_car(false);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Salvar como...", ImVec2(w2, 0))) save_car(true);
+    if (!car_valid_) ImGui::TextColored(color_error(), "%s", car_error_.c_str());
+
+    ImGui::SeparatorText("Carros disponíveis");
+    ImGui::TextDisabled("Arquivos .json em data/cars. Clique para usar.");
+    if (ImGui::BeginListBox("##garagem", ImVec2(-FLT_MIN, 8 * ImGui::GetTextLineHeightWithSpacing()))) {
+        if (ImGui::Selectable("Carro padrão (initializeCar.m)", car_file_.empty() && !car_modified())) {
+            request_car_action(CarAction::Default);
+        }
+        for (std::size_t i = 0; i < car_files_.size(); ++i) {
+            const auto& p = car_files_[i];
+            const bool sel = !car_file_.empty() && fs::u8path(car_file_) == p;
+            const std::string label = to_utf8(p.filename()) + "  -  " + car_names_[i];
+            if (ImGui::Selectable(label.c_str(), sel)) request_car_action(CarAction::Load, p);
+        }
+        ImGui::EndListBox();
     }
-    return s;
+    if (ImGui::SmallButton("Atualizar lista")) refresh_lists();
+    ImGui::SameLine();
+    if (const auto d = find_data_subdir("cars"); !d.empty() && ImGui::SmallButton("Abrir pasta data/cars")) open_folder(d);
+
+    ImGui::SeparatorText("Resumo");
+    car_summary();
 }
 
 }  // namespace fsae::gui

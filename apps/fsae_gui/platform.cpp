@@ -116,6 +116,15 @@ fs::path executable_dir() {
 
 #endif
 
+fs::path settings_path() {
+#ifdef _WIN32
+    if (const wchar_t* appdata = _wgetenv(L"APPDATA")) return fs::path(appdata) / "fsae_lapsim" / "gui.ini";
+#else
+    if (const char* home = std::getenv("HOME")) return fs::path(home) / ".config" / "fsae_lapsim" / "gui.ini";
+#endif
+    return executable_dir() / "fsae_gui.ini";
+}
+
 std::vector<fs::path> data_dirs() {
     std::vector<fs::path> dirs;
     if (const char* env = std::getenv("FSAE_DATA_DIR")) dirs.emplace_back(env);
