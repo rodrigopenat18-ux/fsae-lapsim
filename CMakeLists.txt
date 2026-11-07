@@ -66,6 +66,9 @@ add_library(fsae_core
     src/control/gearbox.cpp
     src/physics/longitudinal.cpp
     src/sim/straight.cpp
+    src/track/track.cpp
+    src/track/corner_speed.cpp
+    src/track/geometry.cpp
 )
 add_library(fsae::core ALIAS fsae_core)
 target_include_directories(fsae_core

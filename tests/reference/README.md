@@ -55,3 +55,9 @@ O C++ faz as contas na mesma ordem do MATLAB, então quase tudo bate **bit a bit
 Por isso os testes que envolvem `sin`, `cos` ou `pow` usam uma tolerância
 relativa pequena (1e-15 a 1e-12), que também cobre as bibliotecas matemáticas de
 Linux, macOS e MSVC no CI. Os tempos totais de cada reta são comparados com `==`.
+
+A geometria do traçado (`geometry.csv`, `track_vectors.csv`) acumula `sin`/`cos`
+do ângulo ponto a ponto e difere do MATLAB em até ~1e-13 m. Ela serve só para
+gráficos e para escolher o ponto de largada, não entra na física. Segmentos e
+velocidades máximas de curva (`segments.csv`, `corners.csv`, `corner_speed.csv`)
+são idênticos bit a bit.
