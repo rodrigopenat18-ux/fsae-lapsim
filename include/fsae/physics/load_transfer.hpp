@@ -34,4 +34,17 @@ struct LoadTransferResult {
 [[nodiscard]] LoadTransferResult load_transfer(const Car& car, double ax_g, double ay_g,
                                                double slope, double velocity) noexcept;
 
+/// Parcelas que não dependem da aceleração (carga estática e aerodinâmica), para
+/// reaproveitar quando a mesma rampa e velocidade são avaliadas com várias acelerações
+/// (iteração de ponto fixo do carAccelerate/carBrake). O resultado é idêntico ao de
+/// `load_transfer`.
+struct LoadBase {
+    WheelLoads static_n{};
+    WheelLoads aero_n{};
+};
+[[nodiscard]] LoadBase load_base(const Car& car, double slope, double velocity) noexcept;
+/// Carga normal por pneu = estática + dinâmica + aero (mesma ordem de soma do MATLAB).
+[[nodiscard]] WheelLoads normal_loads(const Car& car, const LoadBase& base, double ax_g,
+                                      double ay_g) noexcept;
+
 }  // namespace fsae::physics

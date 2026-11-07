@@ -27,20 +27,29 @@ WheelLoads dynamic_transfer(const Car& car, double ax_g, double ay_g) noexcept {
     };
 }
 
-LoadTransferResult load_transfer(const Car& car, double ax_g, double ay_g, double slope,
-                                 double velocity) noexcept {
-    const WheelLoads st = static_loads(car, slope);
-    const WheelLoads dyn = dynamic_transfer(car, ax_g, ay_g);
-
+LoadBase load_base(const Car& car, double slope, double velocity) noexcept {
+    LoadBase b;
+    b.static_n = static_loads(car, slope);
     const double f_down = downforce(car, velocity);
     const double dist_front = (1 - car.cp_aero / 100);
     const double dist_rear = (car.cp_aero / 100);
     const double half_down = f_down / 2;
-    const WheelLoads aero = {dist_front * half_down, dist_front * half_down, dist_rear * half_down,
-                             dist_rear * half_down};
+    b.aero_n = {dist_front * half_down, dist_front * half_down, dist_rear * half_down,
+                dist_rear * half_down};
+    return b;
+}
 
+WheelLoads normal_loads(const Car& car, const LoadBase& base, double ax_g, double ay_g) noexcept {
+    const WheelLoads dyn = dynamic_transfer(car, ax_g, ay_g);
+    WheelLoads n;
+    for (std::size_t i = 0; i < 4; ++i) n[i] = base.static_n[i] + dyn[i] + base.aero_n[i];
+    return n;
+}
+
+LoadTransferResult load_transfer(const Car& car, double ax_g, double ay_g, double slope,
+                                 double velocity) noexcept {
     LoadTransferResult r;
-    for (std::size_t i = 0; i < 4; ++i) r.normal_n[i] = st[i] + dyn[i] + aero[i];
+    r.normal_n = normal_loads(car, load_base(car, slope, velocity), ax_g, ay_g);
     const double total = r.normal_n[0] + r.normal_n[1] + r.normal_n[2] + r.normal_n[3];
     for (std::size_t i = 0; i < 4; ++i) r.distribution[i] = (r.normal_n[i] / total) * 100;
     return r;

@@ -53,6 +53,7 @@ Opcoes do run:
   --json                   imprime o summary.json na saida padrao
   --verbose                relatorio trecho a trecho (como o MATLAB)
   --quiet                  nao imprime o resumo
+  --repeat <n>             roda n vezes e mostra o tempo medio de execucao (benchmark)
 
 Arquivos gravados em --out:
   telemetry.csv   historico completo (mesmas colunas do SimOut.History + lap)
@@ -108,6 +109,7 @@ struct RunArgs {
     bool print_json = false;
     bool verbose = false;
     bool quiet = false;
+    int repeat = 1;
 };
 
 int to_int(const std::string& s, const std::string& opt) {
@@ -138,6 +140,7 @@ RunArgs parse_run(const std::vector<std::string>& args) {
         else if (o == "--json") a.print_json = true;
         else if (o == "--verbose") a.verbose = true;
         else if (o == "--quiet") a.quiet = true;
+        else if (o == "--repeat") a.repeat = to_int(value(), o);
         else usage_error("opcao desconhecida: " + o);
     }
     if (a.track.empty()) usage_error("run precisa de --track");
@@ -197,10 +200,23 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
     opt.laps = a.laps.value_or(fsae::sim::default_laps(event));
     opt.log = a.verbose ? &std::cout : nullptr;
 
-    const auto t0 = std::chrono::steady_clock::now();
-    const auto result = fsae::sim::simulate(car, segments, opt);
-    const double elapsed_ms =
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    if (a.repeat < 1) usage_error("--repeat deve ser >= 1");
+    if (a.repeat > 1) opt.log = nullptr;
+    fsae::sim::SimulationResult result;
+    double best_ms = 1e300, total_ms = 0;
+    for (int k = 0; k < a.repeat; ++k) {
+        const auto t0 = std::chrono::steady_clock::now();
+        result = fsae::sim::simulate(car, segments, opt);
+        const double ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        best_ms = std::min(best_ms, ms);
+        total_ms += ms;
+    }
+    const double elapsed_ms = total_ms / a.repeat;
+    if (a.repeat > 1) {
+        std::printf("Benchmark: %d execucoes, media %.3f ms, melhor %.3f ms (%.0f simulacoes/s)\n",
+                    a.repeat, elapsed_ms, best_ms, 1000.0 / elapsed_ms);
+    }
 
     fsae::io::RunInfo info;
     info.car_name = car.name;

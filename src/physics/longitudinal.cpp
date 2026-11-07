@@ -51,10 +51,11 @@ Step car_accelerate(const Car& car, double engine_force, double drag, double rol
     double accel_new = 5;
     int iter_count = 0;
     constexpr int kMaxIters = 100;
+    const LoadBase base = load_base(car, slope, initial_velocity);
     while (std::abs(accel_guess - accel_new) > 0.001 && iter_count < kMaxIters) {
         accel_guess = accel_new;
-        const auto lt = load_transfer(car, accel_guess / car.g, 0, slope, initial_velocity);
-        const double normal_rear = lt.normal_n[kRearRight] + lt.normal_n[kRearLeft];
+        const WheelLoads n = normal_loads(car, base, accel_guess / car.g, 0);
+        const double normal_rear = n[kRearRight] + n[kRearLeft];
         const double max_traction = max_grip(car, engine_force, normal_rear);
         const double actual_traction = std::min(engine_force, max_traction);
         const double net_force = actual_traction - drag - rolling_resistance - slope_force;
@@ -76,11 +77,12 @@ BrakeStep car_brake(const Car& car, double brake_force, double drag, double roll
     double accel_new = -5;
     int iter_count = 0;
     constexpr int kMaxIters = 300;
+    const LoadBase base = load_base(car, slope, initial_velocity);
     double actual_brake_force = 0;
     while (std::abs(accel_guess - accel_new) > 0.001 && iter_count < kMaxIters) {
         accel_guess = accel_new;
-        const auto lt = load_transfer(car, accel_guess / car.g, 0, slope, initial_velocity);
-        const double total_normal = lt.normal_n[0] + lt.normal_n[1] + lt.normal_n[2] + lt.normal_n[3];
+        const WheelLoads n = normal_loads(car, base, accel_guess / car.g, 0);
+        const double total_normal = n[0] + n[1] + n[2] + n[3];
         const double max_braking_grip = car.mux_static * total_normal;
         actual_brake_force = std::min(brake_force, max_braking_grip);
         const double net_force = -(actual_brake_force + drag + rolling_resistance) - slope_force;
