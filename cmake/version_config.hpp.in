@@ -1,0 +1,7 @@
+#pragma once
+
+// Arquivo gerado pelo CMake a partir de cmake/version_config.hpp.in — não editar.
+#define FSAE_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define FSAE_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define FSAE_VERSION_PATCH @PROJECT_VERSION_PATCH@
+#define FSAE_VERSION_STRING "@PROJECT_VERSION@"

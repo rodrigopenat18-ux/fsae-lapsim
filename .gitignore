@@ -1,0 +1,21 @@
+# Build
+build/
+out/
+cmake-build-*/
+compile_commands.json
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Dados privados da equipe (logs reais, OptimumLap, GPX, resultados .mat)
+data/private/
+
+# Resultados de simulação gerados localmente
+results/
+
+# MATLAB
+*.asv
+*.mat
