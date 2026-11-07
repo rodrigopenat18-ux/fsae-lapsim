@@ -14,6 +14,7 @@ add_executable(fsae_tests
     test_longitudinal.cpp
     test_straight.cpp
     test_track.cpp
+    test_lap.cpp
 )
 target_include_directories(fsae_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fsae_tests PRIVATE fsae::core doctest::doctest fsae_compile_options)

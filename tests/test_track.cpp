@@ -59,7 +59,8 @@ TEST_CASE("velocidade maxima em curva (corner_speed.csv)") {
 
 TEST_CASE("pistas embutidas: segmentos, curvas e geometria iguais ao MATLAB") {
     for (const auto& bt : kTracks) {
-        CAPTURE(bt.file);
+        const std::string file = bt.file;
+        CAPTURE(file);
         const std::string dir = std::string("tracks/") + bt.reference + "/";
         const auto track = load_builtin(bt);
         const auto& seg = track.segments;

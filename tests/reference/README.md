@@ -48,7 +48,8 @@ O C++ faz as contas na mesma ordem do MATLAB, então quase tudo bate **bit a bit
 - o `pow` escalar do MATLAB R2026a não é o arredondamento correto. Em cerca de 9%
   dos valores ele difere em 1 bit (~2e-16 relativo) do `pow` da biblioteca C, do
   `pow` em precisão estendida e até do `libmmd.dll` (Intel) que acompanha o MATLAB;
-- isso aparece só em `h_coef`, `P_conv` e `P_rad` das retas (erro relativo ≤ 6e-16).
+- isso aparece em `h_coef`, `P_conv` e `P_rad` (erro relativo ≤ 8e-16) e, por
+  acúmulo, em algumas amostras de `brake_temp`/`P_cond` das pistas (≤ 6e-16).
   Essas grandezas alimentam apenas a temperatura do disco, que não afeta a dinâmica:
   tempos, posições, velocidades e marchas continuam idênticos.
 
