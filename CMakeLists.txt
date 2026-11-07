@@ -71,6 +71,7 @@ add_library(fsae_core
     src/track/track.cpp
     src/track/corner_speed.cpp
     src/track/geometry.cpp
+    src/track/gpx.cpp
 )
 add_library(fsae::core ALIAS fsae_core)
 target_include_directories(fsae_core

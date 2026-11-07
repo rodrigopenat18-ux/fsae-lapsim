@@ -6,16 +6,21 @@ Uso:
     python tools/python/plot_results.py results/autox --lap all
     python tools/python/plot_results.py results/autox --save figuras/
     python tools/python/plot_results.py results/setupA --compare results/setupB
+    python tools/python/plot_results.py results/autox --log data/private/log_autox.csv
+    python tools/python/plot_results.py results/autox --oplap data/private/Pista_AutoX_OPLap.csv
 
 Por padrão mostra só a última volta (como o runSimulation do MATLAB, que plota a
-volta lançada). Requer numpy e matplotlib (``pip install numpy matplotlib``).
+volta lançada); com --log/--oplap o padrão é a simulação inteira (como o
+plotComparison). Requer numpy e matplotlib (``pip install numpy matplotlib``).
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +61,138 @@ def load_result(folder: Path) -> Result:
     car_file = folder / "car.json"
     car = json.loads(car_file.read_text(encoding="utf-8")) if car_file.is_file() else None
     return Result(folder.name, data, summary, geometry, car)
+
+
+# --- Logs de comparação (loadRealLog.m / loadOPLapLog.m) ---------------------
+
+# Prefixos aceitos para cada coluna do log real (como o loadRealLog.m). A
+# comparação ignora maiúsculas e acentos, então "Distância" casa com "DISTANCIA"
+# (no MATLAB o acento impedia e a distância era recalculada).
+LOG_ALIASES = {
+    "distance": ["distancia", "distance"],
+    "gear": ["marcha", "gear"],
+    "lat_g": ["forca_g_lateral", "aceleracao_lateral"],
+    "long_g": ["forca_g_acelera", "aceleracao_longitudinal"],
+    "rpm": ["rpm"],
+    "time": ["time", "tempo"],
+    "velocity": ["velocidade_de_t", "velocidade"],
+}
+
+
+def _norm(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in text if not unicodedata.combining(c)).lower().strip()
+
+
+def _to_float(text: str) -> float:
+    try:
+        return float(text)
+    except ValueError:
+        return float("nan")
+
+
+def load_real_log(path: Path) -> dict[str, np.ndarray]:
+    """Log de aquisição (CSV com cabeçalho), no formato do history: SI, m/s e m/s²."""
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        rows = list(csv.reader(f))
+    header, body = rows[0], [r for r in rows[1:] if r]
+    cols = {}
+    for name, aliases in LOG_ALIASES.items():
+        for j, h in enumerate(header):
+            if any(_norm(h).startswith(a) for a in aliases):
+                cols[name] = np.array([_to_float(r[j]) if j < len(r) else np.nan for r in body])
+                print(f"   log: '{name}' <- coluna '{h}'")
+                break
+    n = len(body)
+    if "time" not in cols or "velocity" not in cols:
+        sys.exit(f"Erro: {path} precisa de colunas de tempo (TIME/TEMPO) e velocidade (VELOCIDADE...)")
+    if "distance" not in cols:
+        print("   log: sem coluna de distância; calculando por velocidade × tempo")
+        v = cols["velocity"] / 3.6
+        dt = np.diff(np.concatenate([[0.0], cols["time"]]))
+        cols["distance"] = np.concatenate([[0.0], np.cumsum(v[:-1] * dt[1:])])
+    zeros = np.zeros(n)
+    return {
+        "time": cols["time"],
+        "distance": cols["distance"],
+        "velocity": cols["velocity"] / 3.6,
+        "gear": cols.get("gear", zeros),
+        "rpm": cols.get("rpm", zeros),
+        "acceleration": cols.get("long_g", zeros) * 9.81,
+        "lateral_accel": cols.get("lat_g", zeros) * 9.81,
+    }
+
+
+def load_oplap(path: Path) -> dict[str, np.ndarray]:
+    """Exportação do OptimumLap ('[Simulation Results]', separador ';')."""
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    try:
+        start = next(i for i, l in enumerate(lines) if l.strip() == "[Simulation Results]")
+    except StopIteration:
+        sys.exit(f"Erro: {path} não tem a seção [Simulation Results] do OptimumLap")
+    header = [h.strip() for h in lines[start + 1].split(";")]
+    data = [l.split(";") for l in lines[start + 4:] if l.strip()]  # pula 2 linhas de unidades
+
+    def col(prefix: str) -> np.ndarray:
+        j = next((k for k, h in enumerate(header) if h.startswith(prefix)), None)
+        if j is None:
+            sys.exit(f"Erro: coluna '{prefix}' não encontrada no OptimumLap ({path})")
+        return np.array([_to_float(r[j]) for r in data])
+
+    t = col("elapsedTime")
+    d = col("elapsedDistance")
+    return {
+        "time": t - t[0],
+        "distance": d - d[0],
+        "velocity": col("speed") / 3.6,
+        "gear": col("gear"),
+        "rpm": col("engineSpeed"),
+        "acceleration": col("longitudinalAcc") * 9.81,
+        "lateral_accel": col("lateralAccelera") * 9.81,
+    }
+
+
+def sync_start(d: dict[str, np.ndarray], threshold: float = 0.5) -> dict[str, np.ndarray]:
+    """Corta até a primeira amostra com v > 0,5 m/s e zera o tempo (plotComparison.m)."""
+    idx = np.flatnonzero(d["velocity"] > threshold)
+    if idx.size == 0:
+        return d
+    k = int(idx[0])
+    out = {n: v[k:] for n, v in d.items()}
+    out["time"] = out["time"] - out["time"][0]
+    out["distance"] = out["distance"] - out["distance"][0]
+    return out
+
+
+def fig_log_compare(plt, r: Result, sim, label, others: list[tuple[str, dict[str, np.ndarray]]]):
+    """Equivalente ao plotComparison.m (mesmos 6 gráficos, sem o consumo do log)."""
+    fig, ax = plt.subplots(5, 1, figsize=(10, 11), sharex=True, constrained_layout=True)
+    names = ", ".join(n for n, _ in others)
+    fig.suptitle(f"{r.summary['track']['name']} — simulação ({label}) vs. {names}", color=TEXT)
+    series = [("Simulação", sync_start(sim))] + [(n, sync_start(o)) for n, o in others]
+    panels = [
+        ("Velocidade", "km/h", lambda d: d["velocity"] * 3.6),
+        ("Rotação do motor", "rpm", lambda d: d["rpm"]),
+        ("Aceleração longitudinal", "g", lambda d: d["acceleration"] / 9.81),
+        ("Aceleração lateral", "g", lambda d: d["lateral_accel"] / 9.81),
+        ("Marcha", "marcha", None),
+    ]
+    for a, (title, unit, f) in zip(ax, panels):
+        for i, (n, d) in enumerate(series):
+            if f is None:
+                a.step(d["time"], d["gear"], where="post", color=SERIES[i], label=n,
+                       linewidth=2 if i == 0 else 1.5)
+            else:
+                a.plot(d["time"], f(d), color=SERIES[i], label=n, linewidth=2 if i == 0 else 1.5)
+        a.set_title(title)
+        a.set_ylabel(unit)
+    ax[0].legend(loc="lower right", bbox_to_anchor=(1.0, 1.0), ncol=len(series))
+    ax[-1].set_xlabel("Tempo (s)")
+    ax[-1].set_xlim(0, max(d["time"][-1] for _, d in series))
+    for i, (n, d) in enumerate(series):
+        print(f"   {n}: {d['time'][-1]:.3f} s, {d['distance'][-1]:.1f} m, "
+              f"v máx {np.nanmax(d['velocity']) * 3.6:.1f} km/h")
+    return fig
 
 
 def select_lap(r: Result, lap: str) -> tuple[dict[str, np.ndarray], str]:
@@ -244,11 +381,17 @@ def fig_compare(plt, runs: list[tuple[Result, dict, str]]):
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("result", type=Path, help="pasta gravada por 'fsae_sim run'")
-    p.add_argument("--lap", default="last", help="número da volta, 'last' (padrão) ou 'all'")
+    p.add_argument("--lap", default=None,
+                   help="número da volta, 'last' ou 'all' (padrão: 'last'; 'all' com --log/--oplap)")
     p.add_argument("--compare", type=Path, nargs="+", default=[],
                    help="outras pastas para comparar com a primeira (até 2)")
+    p.add_argument("--log", type=Path, help="log de aquisição do carro real (CSV) para comparar")
+    p.add_argument("--oplap", type=Path, help="exportação do OptimumLap (CSV ';') para comparar")
     p.add_argument("--save", type=Path, help="grava PNGs nesta pasta em vez de abrir janelas")
     args = p.parse_args(argv)
+    has_logs = args.log is not None or args.oplap is not None
+    if args.lap is None:
+        args.lap = "all" if has_logs else "last"
 
     import matplotlib
     if args.save:
@@ -263,7 +406,18 @@ def main(argv=None) -> int:
           + " ".join(f"{t:.3f}" for t in s["lap_times_s"] if t is not None))
 
     figs = {}
-    if args.compare:
+    if has_logs:
+        if args.compare:
+            sys.exit("Erro: use --compare ou --log/--oplap, não os dois juntos.")
+        others = []
+        if args.log:
+            print(f"Log real: {args.log}")
+            others.append(("Log real", load_real_log(args.log)))
+        if args.oplap:
+            print(f"OptimumLap: {args.oplap}")
+            others.append(("OptimumLap", load_oplap(args.oplap)))
+        figs["vs_log"] = fig_log_compare(plt, main_r, d, label, others)
+    elif args.compare:
         if len(args.compare) > 2:
             sys.exit("Erro: compare no máximo 3 resultados de uma vez (cores distintas garantidas).")
         runs = [(main_r, d, label)]

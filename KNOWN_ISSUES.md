@@ -20,6 +20,21 @@ depois, um de cada vez, como opção (desligada por padrão) e com o impacto med
 - Tração cai de μ estático para μ cinético quando a força do motor passa da aderência estática.
 - Não há modo endurance (planejado: autocross + 25 voltas). O C++ já aceita qualquer número de voltas (`--laps`).
 
+## Observações sobre os dados das pistas
+
+- `track_AutoX_2024_V1.m`: aplicando o GPX da equipe (`fsae_sim gpx-slope`) à geometria
+  original, os slopes dos segmentos 1–31 batem com a matriz até a 6ª casa decimal.
+  Os segmentos 32–35 (o antigo segmento 32 dividido em quatro) e o 52 foram editados à
+  mão e não batem: o segmento 32 tem `+0.089364`, e o GPX dá exatamente `−0.089364`
+  (provável sinal trocado). Os dados foram mantidos como estão no MATLAB.
+
 ## Corrigido no port (não afeta a física)
 
-- `loadRealLog.m`: o tipo 1 procurava `log_autocross.csv`, que não existe (arquivo real: `log_autox.csv`).
+- `loadRealLog.m`: o tipo 1 procurava `log_autocross.csv`, que não existe (arquivo real:
+  `log_autox.csv`). Agora o arquivo é passado explicitamente (`tools/matlab/loadRealLogFile.m`,
+  `plot_results.py --log`).
+- `loadRealLog.m`: o apelido `DISTANCIA` não casava com a coluna `Distância` por causa do
+  acento, e a distância era sempre recalculada; os nomes agora são comparados sem acentos.
+- Comparação com log no Python: o log também é sincronizado no primeiro instante com
+  v > 0,5 m/s (o `plotComparison.m` só sincronizava a simulação, e o log aparecia
+  deslocado pelo tempo do datalogger, ex.: começando em 152 s).

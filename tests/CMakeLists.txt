@@ -16,6 +16,7 @@ add_executable(fsae_tests
     test_track.cpp
     test_lap.cpp
     test_results.cpp
+    test_gpx.cpp
 )
 target_include_directories(fsae_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fsae_tests PRIVATE fsae::core doctest::doctest nlohmann_json::nlohmann_json

@@ -15,6 +15,7 @@
 #include "fsae/io/results.hpp"
 #include "fsae/sim/lap.hpp"
 #include "fsae/track/geometry.hpp"
+#include "fsae/track/gpx.hpp"
 #include "fsae/track/track.hpp"
 #include "fsae/version.hpp"
 #include "fsae/vehicle/car.hpp"
@@ -29,6 +30,9 @@ Uso:
   fsae_sim run --track <arquivo|nome> [opcoes]   simula e grava os resultados
   fsae_sim list-tracks                           lista as pistas em data/tracks
   fsae_sim check-track <arquivo>                 valida uma pista
+  fsae_sim gpx-slope <pista> <arquivo.gpx> <saida.csv>
+                                                 preenche a inclinacao dos segmentos com a
+                                                 altitude de um GPX (applyAltitudeFromGPX)
   fsae_sim convert-track <entrada> <saida.csv> [comentario]
                                                  converte pista (trackExcel/OptimumLap ou
                                                  matriz do MATLAB) para o CSV do projeto
@@ -270,6 +274,25 @@ int main(int argc, char** argv) {
             for (const auto& s : t.segments) corners += s.is_corner() ? 1 : 0;
             std::cout << "OK: \"" << t.name << "\" (" << t.segments.size() << " segmentos, "
                       << corners << " curvas, " << t.length() << " m)\n";
+            return 0;
+        }
+        if (cmd == "gpx-slope" && rest.size() == 3) {
+            const auto t = fsae::track::load_track(resolve_track(rest[0], argv[0]));
+            const auto pts = fsae::track::load_gpx(rest[1]);
+            const auto r = fsae::track::apply_gpx_altitude(t.segments, pts);
+            std::printf("%-4s %10s %10s %10s %10s %12s\n", "seg", "L (m)", "z ini (m)", "z fim (m)",
+                        "dz (m)", "slope (rad)");
+            for (std::size_t i = 0; i < r.segments.size(); ++i) {
+                std::printf("%-4zu %10.3f %10.3f %10.3f %10.4f %12.6f\n", i + 1, r.segments[i].length,
+                            r.alt_start[i], r.alt_end[i], r.delta_z[i], r.segments[i].slope);
+            }
+            std::printf("Erro de fechamento do GPX (distribuido): %.4f m (%zu pontos)\n",
+                        r.z_error_total, pts.size());
+            fsae::track::Track out{t.name, r.segments};
+            fsae::track::save_track(out, rest[2],
+                                    "Inclinacao [rad] calculada de " +
+                                        fs::path(rest[1]).filename().string() + " (fsae_sim gpx-slope)");
+            std::printf("Gravado %s\n", rest[2].c_str());
             return 0;
         }
         if (cmd == "convert-track" && (rest.size() == 2 || rest.size() == 3)) {
