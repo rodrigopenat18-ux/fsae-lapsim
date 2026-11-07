@@ -38,3 +38,20 @@ Pistas: `autox`, `skidpad`, `acceleration`, `autox2024v1`, `autox2024v1_rev`.
 ```bash
 matlab -batch "addpath('tools/matlab'); export_reference"
 ```
+
+## Precisão da comparação
+
+O C++ faz as contas na mesma ordem do MATLAB, então quase tudo bate **bit a bit**
+(tolerância zero). A exceção conhecida é `pow` com expoente fracionário
+(`Re^0.55`, `Re^0.8`, `Re^0.5` no `calculateBrakeTemp`):
+
+- o `pow` escalar do MATLAB R2026a não é o arredondamento correto. Em cerca de 9%
+  dos valores ele difere em 1 bit (~2e-16 relativo) do `pow` da biblioteca C, do
+  `pow` em precisão estendida e até do `libmmd.dll` (Intel) que acompanha o MATLAB;
+- isso aparece só em `h_coef`, `P_conv` e `P_rad` das retas (erro relativo ≤ 6e-16).
+  Essas grandezas alimentam apenas a temperatura do disco, que não afeta a dinâmica:
+  tempos, posições, velocidades e marchas continuam idênticos.
+
+Por isso os testes que envolvem `sin`, `cos` ou `pow` usam uma tolerância
+relativa pequena (1e-15 a 1e-12), que também cobre as bibliotecas matemáticas de
+Linux, macOS e MSVC no CI. Os tempos totais de cada reta são comparados com `==`.

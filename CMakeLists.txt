@@ -65,6 +65,7 @@ add_library(fsae_core
     src/physics/brake_thermal.cpp
     src/control/gearbox.cpp
     src/physics/longitudinal.cpp
+    src/sim/straight.cpp
 )
 add_library(fsae::core ALIAS fsae_core)
 target_include_directories(fsae_core
