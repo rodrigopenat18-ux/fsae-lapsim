@@ -55,6 +55,9 @@ Arquivos gravados em --out:
   summary.json    tempos, consumo e maximos (SimOut.Results)
   track.csv       segmentos usados e velocidade maxima de cada curva
   geometry.csv    tracado X/Y/Z para graficos
+  car.json        carro usado na simulacao
+
+Graficos: tools/matlab/plotCppResult.m (MATLAB) ou tools/python/plot_results.py.
 )";
 
 [[noreturn]] void usage_error(const std::string& msg) {
@@ -171,7 +174,9 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
 
     const fs::path track_path = resolve_track(a.track, argv0);
     const auto track = fsae::track::load_track(track_path);
-    const fsae::Car car = a.car.empty() ? fsae::Car::matlab_default() : fsae::io::load_car(a.car);
+    const fsae::CarSpec car_spec =
+        a.car.empty() ? fsae::CarSpec::matlab_default() : fsae::io::load_car_spec(a.car);
+    const fsae::Car car = fsae::Car::from_spec(car_spec);
 
     fsae::sim::Event event = fsae::sim::Event::Autocross;
     if (a.event) {
@@ -207,6 +212,7 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
         fsae::io::write_summary_json(out / "summary.json", result, info);
         fsae::io::write_segments_csv(out / "track.csv", segments, result);
         fsae::io::write_geometry_csv(out / "geometry.csv", fsae::track::build_geometry(segments));
+        fsae::io::save_car_spec(car_spec, out / "car.json");
         if (!a.quiet && !a.print_json) std::printf("\nResultados gravados em %s\n", out.generic_string().c_str());
     }
     if (a.print_json) {

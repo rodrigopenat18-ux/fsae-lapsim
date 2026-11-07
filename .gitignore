@@ -19,3 +19,5 @@ results/
 # MATLAB
 *.asv
 *.mat
+__pycache__/
+*.pyc
