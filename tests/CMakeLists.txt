@@ -10,6 +10,7 @@ add_executable(fsae_tests
     test_math.cpp
     test_car.cpp
     test_physics.cpp
+    test_gearbox.cpp
 )
 target_include_directories(fsae_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fsae_tests PRIVATE fsae::core doctest::doctest fsae_compile_options)
