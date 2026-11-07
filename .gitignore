@@ -21,3 +21,9 @@ resultados/
 *.mat
 __pycache__/
 *.pyc
+
+# Executáveis copiados para a raiz depois de compilar (FSAE_COPY_TO_ROOT)
+/fsae_gui.exe
+/fsae_sim.exe
+/fsae_gui
+/fsae_sim

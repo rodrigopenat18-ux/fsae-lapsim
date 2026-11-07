@@ -8,6 +8,18 @@ O port reproduz o MATLAB **bit a bit**: nas 5 pistas de referência, tempo total
 volta, velocidade máxima, aceleração lateral e consumo são idênticos aos do simulador
 original, e roda cerca de **2.000 vezes mais rápido**.
 
+## Baixar e usar (Windows)
+
+1. Baixe o **`fsae-lapsim-...-windows.zip`** na página da
+   **[versão mais recente](https://github.com/rodrigopenat18-ux/fsae-lapsim/releases/latest)**
+   (também aparece em *Releases*, na lateral direita desta página).
+2. Descompacte em qualquer pasta.
+3. Dê duplo clique em **`fsae_gui.exe`**. Não precisa instalar nem compilar nada.
+4. Escolha a pista e clique em **Rodar simulação** (F5).
+
+Mantenha a pasta `dados` ao lado do `.exe`: é lá que ficam os carros e as pistas.
+Compilar só é necessário para quem quiser alterar o código (seção [Instalação](#instalação)).
+
 São dois programas, os dois em C++:
 
 - **`fsae_gui`**, a interface gráfica: edite o carro, escolha a pista, rode e veja a
@@ -85,12 +97,14 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-Os executáveis ficam em `build/release/programas/interface/fsae_gui.exe` (interface) e
-`build/release/programas/linha_de_comando/fsae_sim.exe` (linha de comando).
+Depois de compilar, **`fsae_gui.exe` e `fsae_sim.exe` aparecem na própria pasta do projeto**,
+ao lado de `dados/`: é só dar duplo clique. Essas cópias não vão para o Git. Os originais
+ficam em `build/release/programas/`.
 
 ## Interface gráfica
 
-Abra `fsae_gui.exe` com um duplo clique. Ele procura a pasta `dados` (carros e pistas)
+Abra `fsae_gui.exe` com um duplo clique (o do zip baixado ou o da pasta do projeto, depois
+de compilar). Ele procura a pasta `dados` (carros e pistas)
 subindo a partir da pasta do executável. Se copiar o `.exe` para outro lugar, leve a pasta
 `dados` junto ou defina a variável de ambiente `FSAE_DATA_DIR`.
 

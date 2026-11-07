@@ -12,6 +12,15 @@ option(FSAE_BUILD_TESTS "Compila os testes unitários e de validação" ON)
 option(FSAE_BUILD_APPS  "Compila o executável de linha de comando"  ON)
 option(FSAE_BUILD_GUI   "Compila a interface gráfica (fsae_gui)"    ON)
 
+# Depois de compilar em Release, copia fsae_gui e fsae_sim para a raiz do repositório
+# (ao lado de dados/), para abrir com duplo clique. As cópias ficam fora do Git.
+if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(_fsae_copy_default ON)
+else()
+    set(_fsae_copy_default OFF)
+endif()
+option(FSAE_COPY_TO_ROOT "Copia os executáveis para a raiz após compilar (só Release)" ${_fsae_copy_default})
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Tipo de build" FORCE)
 endif()

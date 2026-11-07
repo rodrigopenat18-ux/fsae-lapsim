@@ -5,7 +5,8 @@
 | `interface/` | `fsae_gui.exe` | interface gráfica: editar o carro, escolher a pista, rodar e ver os gráficos |
 | `linha_de_comando/` | `fsae_sim.exe` | rodar em lote, em scripts ou num otimizador (`fsae_sim run --track autox --json`) |
 
-Depois de compilar, os executáveis ficam em `build/release/programas/...`. Os dois procuram a
+Depois de compilar, os executáveis são copiados para a raiz do projeto (originais em
+`build/release/programas/...`). Os dois procuram a
 pasta [`dados/`](../dados) subindo a partir da pasta do executável, ou na variável de
 ambiente `FSAE_DATA_DIR`.
 

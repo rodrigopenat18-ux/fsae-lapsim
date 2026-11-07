@@ -62,3 +62,10 @@ endif()
 if(WIN32)
     target_link_libraries(fsae_gui PRIVATE comdlg32 shell32)
 endif()
+
+if(FSAE_COPY_TO_ROOT)
+    add_custom_command(TARGET fsae_gui POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -DSRC=$<TARGET_FILE:fsae_gui> -DDST_DIR=${PROJECT_SOURCE_DIR}
+                -P ${PROJECT_SOURCE_DIR}/programas/copiar_para_raiz.cmake
+        VERBATIM)
+endif()
