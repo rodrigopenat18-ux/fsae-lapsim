@@ -11,10 +11,10 @@ compile_commands.json
 *.swp
 
 # Dados privados da equipe (logs reais, OptimumLap, GPX, resultados .mat)
-dados/privado/
+Data/Private/
 
 # Resultados de simulação gerados localmente
-resultados/
+Results/
 
 # MATLAB
 *.asv

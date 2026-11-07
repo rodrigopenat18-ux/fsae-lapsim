@@ -13,7 +13,7 @@ option(FSAE_BUILD_APPS  "Compila o executável de linha de comando"  ON)
 option(FSAE_BUILD_GUI   "Compila a interface gráfica (fsae_gui)"    ON)
 
 # Depois de compilar em Release, copia fsae_gui e fsae_sim para a raiz do repositório
-# (ao lado de dados/), para abrir com duplo clique. As cópias ficam fora do Git.
+# (ao lado de Data/), para abrir com duplo clique. As cópias ficam fora do Git.
 if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Release")
     set(_fsae_copy_default ON)
 else()
@@ -78,16 +78,16 @@ target_include_directories(fsae_miniz SYSTEM PUBLIC ${miniz_SOURCE_DIR})
 set_target_properties(fsae_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # A física do simulador (biblioteca fsae::core)
-add_subdirectory(simulador)
+add_subdirectory(Modules)
 
 # ---------------------------------------------------------------------------
 # Programas
 # ---------------------------------------------------------------------------
 if(FSAE_BUILD_APPS)
-    add_subdirectory(programas/linha_de_comando)
+    add_subdirectory(Root/CLI)
 endif()
 if(FSAE_BUILD_GUI)
-    add_subdirectory(programas/interface)
+    add_subdirectory(Root/GUI)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -95,5 +95,5 @@ endif()
 # ---------------------------------------------------------------------------
 if(FSAE_BUILD_TESTS)
     enable_testing()
-    add_subdirectory(validacao/testes)
+    add_subdirectory(Tests)
 endif()

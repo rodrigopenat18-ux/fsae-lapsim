@@ -3,17 +3,17 @@
 Contribuições de outras equipes são bem-vindas: correções, novas pistas, melhorias de
 física, ferramentas de análise.
 
-## Regra principal: o MATLAB é o gabarito
+## Regra principal: resultados não mudam sem querer
 
-Esta versão reproduz o simulador MATLAB original bit a bit, e os testes garantem isso.
-Por isso:
+Os testes em [`Tests/`](Tests) comparam o simulador com resultados de referência, a maioria
+com tolerância zero. Por isso:
 
-- **Mudanças que não deveriam alterar resultados** (refatoração, desempenho, entrada/saída)
-  precisam manter todos os testes passando **sem afrouxar tolerâncias**.
-- **Mudanças de física** (corrigir um item dos [problemas conhecidos](docs/problemas_conhecidos.md), modelar
-  algo novo) entram como **opção desligada por padrão**. Assim, o comportamento original
-  continua disponível e validado. Junto com a mudança, mostre o impacto no tempo de volta
-  das pistas de `dados/pistas/`.
+- **Mudanças que não deveriam alterar resultados** (refatoração, desempenho, interface,
+  entrada/saída) precisam manter todos os testes passando **sem afrouxar tolerâncias**.
+- **Mudanças de física** (corrigir um item dos [problemas conhecidos](docs/problemas_conhecidos.md),
+  modelar algo novo) entram como **opção desligada por padrão**. Assim, o comportamento
+  atual continua disponível e testado. Junto com a mudança, mostre o impacto no tempo de
+  volta das pistas de `Data/Tracks/`.
 
 ## Fluxo
 
@@ -25,24 +25,21 @@ ctest --preset release
 
 Para depurar, use o preset `debug` (ativa os `assert`s internos).
 
-Se mudar algo no `matlab/` ou no exportador, regenere as referências e explique a mudança
-no PR:
-
-```bash
-matlab -batch "addpath('validacao/gerar_gabarito'); export_reference"
-```
-
 ## Estilo
 
-- C++17, sem dependências além das já usadas (nlohmann/json e doctest).
+- C++17, sem dependências além das já usadas.
 - Formatação: `.clang-format` do repositório.
-- Ao portar ou alterar uma conta, mantenha a **mesma ordem de operações** do MATLAB e
-  cite a função original no comentário. A ordem muda o arredondamento e quebra a
-  comparação bit a bit.
-- Mensagens para o usuário em português; nomes no código em inglês, com o nome MATLAB
-  correspondente entre parênteses na documentação.
+- Ao alterar uma conta existente, mantenha a **mesma ordem de operações**: mudar a ordem
+  muda o arredondamento e os testes acusam.
+- Mensagens para o usuário em português; nomes no código em inglês.
 
 ## Dados
 
 Não envie dados privados da equipe (logs de aquisição, GPX, exportações do OptimumLap).
-A pasta `dados/privado/` é ignorada pelo Git justamente para isso.
+A pasta `Data/Private/` é ignorada pelo Git justamente para isso.
+
+## Sobre o MATLAB
+
+A pasta [`MATLAB/`](MATLAB) guarda a versão original do simulador e as referências usadas
+pelos testes. Só é preciso mexer lá se a referência tiver que ser regenerada
+(`matlab -batch "addpath('MATLAB/Scripts'); export_reference"`).

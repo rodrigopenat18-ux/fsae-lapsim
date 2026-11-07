@@ -31,7 +31,7 @@ depois, um de cada vez, como opção (desligada por padrão) e com o impacto med
 ## Corrigido no port (não afeta a física)
 
 - `loadRealLog.m`: o tipo 1 procurava `log_autocross.csv`, que não existe (arquivo real:
-  `log_autox.csv`). Agora o arquivo é passado explicitamente (`graficos/matlab/loadRealLogFile.m`,
+  `log_autox.csv`). Agora o arquivo é passado explicitamente (`MATLAB/Tools/loadRealLogFile.m`,
   `plot_results.py --log`).
 - `loadRealLog.m`: o apelido `DISTANCIA` não casava com a coluna `Distância` por causa do
   acento, e a distância era sempre recalculada; os nomes agora são comparados sem acentos.
