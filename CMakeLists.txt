@@ -10,6 +10,7 @@ project(fsae_lapsim
 # ---------------------------------------------------------------------------
 option(FSAE_BUILD_TESTS "Compila os testes unitários e de validação" ON)
 option(FSAE_BUILD_APPS  "Compila o executável de linha de comando"  ON)
+option(FSAE_BUILD_GUI   "Compila a interface gráfica (fsae_gui)"    ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Tipo de build" FORCE)
@@ -88,6 +89,9 @@ configure_file(cmake/version_config.hpp.in
 # ---------------------------------------------------------------------------
 if(FSAE_BUILD_APPS)
     add_subdirectory(apps/fsae_sim)
+endif()
+if(FSAE_BUILD_GUI)
+    add_subdirectory(apps/fsae_gui)
 endif()
 
 # ---------------------------------------------------------------------------

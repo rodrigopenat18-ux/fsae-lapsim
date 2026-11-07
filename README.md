@@ -8,9 +8,17 @@ O port reproduz o MATLAB **bit a bit**: nas 5 pistas de referência, tempo total
 volta, velocidade máxima, aceleração lateral e consumo são idênticos aos do simulador
 original, e roda cerca de **2.000 vezes mais rápido**.
 
+São dois programas, os dois em C++:
+
+- **`fsae_gui`**, a interface gráfica: edite o carro, escolha a pista, rode e veja a
+  telemetria, o mapa da pista, o diagrama G-G, as curvas e a comparação entre setups;
+- **`fsae_sim`**, a linha de comando: para rodar em lote, em scripts ou num otimizador.
+
+![Interface gráfica: telemetria da volta lançada](docs/img/gui_telemetria.png)
+
 *English summary: Formula SAE point-mass lap time simulator in C++17, ported from a MATLAB
-simulator and validated against it bit for bit. Command-line tool that writes CSV/JSON;
-plots with MATLAB or Python.*
+simulator and validated against it bit for bit. Desktop GUI (Dear ImGui + ImPlot) to edit
+the car, run and plot; command-line tool that writes CSV/JSON.*
 
 | Pista | Voltas | Tempo (C++ = MATLAB) | MATLAB | C++ |
 |---|---|---|---|---|
@@ -25,10 +33,11 @@ Tempos medidos no computador de desenvolvimento (Windows 11); MATLAB R2026a, C++
 ## Índice
 
 - [Instalação](#instalação)
-- [Uso rápido](#uso-rápido)
+- [Interface gráfica](#interface-gráfica)
+- [Uso rápido (linha de comando)](#uso-rápido-linha-de-comando)
 - [Comandos](#comandos)
 - [Arquivos de saída](#arquivos-de-saída)
-- [Gráficos](#gráficos)
+- [Gráficos fora da interface](#gráficos-fora-da-interface)
 - [O carro (JSON)](#o-carro-json)
 - [Pistas](#pistas)
 - [Comparar com dados reais](#comparar-com-dados-reais)
@@ -39,10 +48,13 @@ Tempos medidos no computador de desenvolvimento (Windows 11); MATLAB R2026a, C++
 
 ## Instalação
 
-Requisitos: compilador C++17 (GCC ≥ 9, Clang ≥ 10 ou MSVC 2019+), CMake ≥ 3.20 e,
-recomendado, Ninja. Na primeira compilação o CMake baixa duas dependências
-([nlohmann/json](https://github.com/nlohmann/json) e [doctest](https://github.com/doctest/doctest)),
-então é preciso internet.
+Requisitos: compilador C++17, CMake ≥ 3.20 e Ninja. Na primeira compilação o CMake baixa
+as bibliotecas usadas, então é preciso internet:
+
+- [nlohmann/json](https://github.com/nlohmann/json), para ler o JSON do carro;
+- [doctest](https://github.com/doctest/doctest), para os testes;
+- [GLFW](https://www.glfw.org), [Dear ImGui](https://github.com/ocornut/imgui) e
+  [ImPlot](https://github.com/epezent/implot), para a interface.
 
 ### Windows (MSYS2)
 
@@ -57,12 +69,11 @@ pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w
 ```
 
 Depois, adicione `C:\msys64\ucrt64\bin` ao PATH do Windows (ou rode os comandos abaixo no
-próprio terminal UCRT64). O executável gerado é estático: roda em qualquer Windows sem o MSYS2.
+próprio terminal UCRT64). Os executáveis gerados são estáticos: rodam em qualquer Windows
+sem o MSYS2.
 
-### Linux / macOS
-
-Instale `cmake`, `ninja` e um compilador (`build-essential` no Ubuntu, Xcode Command Line
-Tools no macOS).
+O código é C++ padrão. Em Linux e macOS basta instalar `cmake`, `ninja` e um compilador
+(no Linux, também os pacotes de desenvolvimento do OpenGL/X11 para a interface).
 
 ### Compilar e testar
 
@@ -72,9 +83,56 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-O executável fica em `build/release/apps/fsae_sim/fsae_sim` (`.exe` no Windows).
+Os executáveis ficam em `build/release/apps/fsae_gui/fsae_gui.exe` (interface) e
+`build/release/apps/fsae_sim/fsae_sim.exe` (linha de comando).
 
-## Uso rápido
+## Interface gráfica
+
+Abra `fsae_gui.exe` com um duplo clique. Ele procura a pasta `data` (carros e pistas)
+subindo a partir da pasta do executável. Se copiar o `.exe` para outro lugar, leve a pasta
+`data` junto ou defina a variável de ambiente `FSAE_DATA_DIR`.
+
+**Painel da esquerda, de cima para baixo:**
+
+1. **Pista e prova:** escolha uma pista de `data/tracks` ou abra qualquer CSV
+   (os três formatos da seção [Pistas](#pistas)), a prova, o número de voltas e o
+   segmento de largada.
+2. **Simulação:**
+   - **Rodar simulação** (ou F5) guarda uma nova execução. Até 8 ficam guardadas, cada
+     uma com sua cor, para comparar setups.
+   - **Atualizar automaticamente ao editar** refaz a última execução a cada alteração:
+     mude o Cl·A ou uma relação de marcha e veja o tempo mudar na hora.
+3. **Resultado:** tempos de volta, máximos e consumo. **Salvar resultados** grava os mesmos
+   arquivos da linha de comando (`telemetry.csv`, `summary.json`...).
+4. **Carro:** todos os parâmetros do `initializeCar.m`, agrupados e com unidade:
+   - massa, aerodinâmica, chassi e pneus;
+   - transmissão, com uma tabela de marchas;
+   - curvas de torque e BSFC, editáveis ponto a ponto;
+   - freio e ar.
+
+   Passe o mouse sobre um campo para ver o nome no MATLAB. **Abrir...** e
+   **Salvar como...** leem e gravam o JSON do carro. Valores inválidos aparecem em
+   vermelho e bloqueiam a simulação.
+
+**Abas de gráficos.** Em todas dá para escolher a volta (última, todas ou uma
+específica), dar zoom com a roda do mouse e arrastar.
+
+| Aba | O que mostra |
+|---|---|
+| Telemetria | qualquer combinação de canais empilhados (velocidade, acelerações, rpm, marcha, forças, carga, temperatura e calor do disco, combustível) por tempo ou distância, para todas as execuções visíveis |
+| Mapa da pista | a pista colorida por qualquer canal; passe o mouse para ler o valor |
+| Diagrama G-G | aceleração lateral × longitudinal |
+| Dispersão X-Y | qualquer canal contra qualquer outro |
+| Curvas | velocidade-limite × velocidade real em cada curva, e tabela dos segmentos com o que limitou cada curva |
+| Comparação | velocidade e diferença de tempo acumulada ao longo da pista, em relação a uma execução de base |
+| Motor | torque, potência e BSFC do carro em edição, e rpm × velocidade em cada marcha |
+| Execuções | tabela com todas as execuções: renomear, esconder, salvar, remover ou copiar o carro de volta para o editor |
+
+![Comparação entre dois setups (Cl·A +20%)](docs/img/gui_compara.png)
+
+![Mapa da pista colorido pela velocidade](docs/img/gui_mapa.png)
+
+## Uso rápido (linha de comando)
 
 ```bash
 fsae_sim run --track autox
@@ -155,7 +213,10 @@ O programa procura as pistas por nome em `$FSAE_DATA_DIR/tracks`, `./data/tracks
 Os números são gravados na menor forma decimal que reproduz o valor exato, então reler os
 arquivos não perde precisão.
 
-## Gráficos
+## Gráficos fora da interface
+
+Opcional: os resultados gravados (`telemetry.csv` etc.) também abrem nos gráficos
+originais do MATLAB ou num script Python.
 
 **MATLAB** — os gráficos originais (`plotResults`) funcionam com o resultado do C++:
 
@@ -311,7 +372,7 @@ const auto r = fsae::sim::simulate(car, track.segments, opt);
 ```
 
 Com `add_subdirectory` ou `FetchContent` no CMake, ligue a `fsae::core` (use
-`-DFSAE_BUILD_TESTS=OFF -DFSAE_BUILD_APPS=OFF` para compilar só a biblioteca).
+`-DFSAE_BUILD_TESTS=OFF -DFSAE_BUILD_APPS=OFF -DFSAE_BUILD_GUI=OFF` para compilar só a biblioteca).
 
 ## Estrutura do projeto
 
@@ -324,6 +385,7 @@ include/fsae/      cabeçalhos públicos
   sim/             reta e volta completa
   io/              CSV, JSON do carro, arquivos de resultado
 src/               implementação
+apps/fsae_gui/     interface gráfica (Dear ImGui + ImPlot)
 apps/fsae_sim/     programa de linha de comando
 tests/             testes (doctest) e dados de referência do MATLAB
 tools/matlab/      geração das referências, leitura dos resultados e gráficos no MATLAB
@@ -332,7 +394,7 @@ data/cars/         carros
 data/tracks/       pistas
 data/private/      dados da equipe (logs, GPX, OptimumLap); fora do Git
 matlab/            simulador MATLAB original (referência)
-docs/              documentação
+docs/              documentação e imagens
 ```
 
 ## Limitações e próximos passos
