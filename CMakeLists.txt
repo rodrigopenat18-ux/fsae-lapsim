@@ -43,17 +43,31 @@ endif()
 # ---------------------------------------------------------------------------
 # Biblioteca principal
 # ---------------------------------------------------------------------------
+include(FetchContent)
+# O CMake 4 removeu a compatibilidade com projetos que declaram versão mínima < 3.5.
+# Esta variável só vale para as dependências baixadas (ignorada no CMake 3.x).
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+FetchContent_Declare(nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_library(fsae_core
     src/version.cpp
     src/io/csv.cpp
+    src/io/car_json.cpp
     src/math/interp.cpp
+    src/vehicle/engine.cpp
+    src/vehicle/car.cpp
 )
 add_library(fsae::core ALIAS fsae_core)
 target_include_directories(fsae_core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
-target_link_libraries(fsae_core PRIVATE fsae_compile_options)
+target_link_libraries(fsae_core PRIVATE fsae_compile_options nlohmann_json::nlohmann_json)
 
 configure_file(cmake/version_config.hpp.in
                ${CMAKE_CURRENT_BINARY_DIR}/generated/fsae/version_config.hpp @ONLY)
