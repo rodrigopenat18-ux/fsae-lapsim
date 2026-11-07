@@ -30,6 +30,7 @@ significativos (`%.17g`). Valores especiais aparecem como `Inf`, `-Inf` e `NaN`.
 | `tracks/<pista>/corners.csv` | `initializeTrack` | velocidade máxima por segmento |
 | `tracks/<pista>/history.csv` | `runSimulation` | histórico completo da simulação |
 | `tracks/<pista>/results.csv` | `runSimulation` | `SimOut.Results` |
+| `gpx/synthetic.gpx`, `gpx/segments_in.csv`, `gpx/slopes.csv`, `gpx/segments_out.csv`, `gpx/z_error.csv` | `applyAltitudeFromGPX` (via [`export_gpx_reference.m`](../../tools/matlab/export_gpx_reference.m)) | GPX sintético sobre a autox 2024 V1 e as inclinações calculadas |
 
 Pistas: `autox`, `skidpad`, `acceleration`, `autox2024v1`, `autox2024v1_rev`.
 
