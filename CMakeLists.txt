@@ -61,6 +61,8 @@ add_library(fsae_core
     src/math/interp.cpp
     src/vehicle/engine.cpp
     src/vehicle/car.cpp
+    src/physics/load_transfer.cpp
+    src/physics/brake_thermal.cpp
 )
 add_library(fsae::core ALIAS fsae_core)
 target_include_directories(fsae_core
