@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "Se usar este simulador em um trabalho acadêmico, cite-o assim."
+title: "fsae-lapsim: simulador de tempo de volta para Formula SAE"
+abstract: >-
+  Simulador de tempo de volta para Formula SAE em C++17 (modelo de ponto de massa com
+  transferência de carga, aerodinâmica, motor com câmbio, temperatura do disco de freio e
+  consumo por BSFC), portado de um simulador MATLAB e validado contra ele bit a bit.
+type: software
+license: MIT
+version: 0.1.0
+authors:
+  - given-names: Rodrigo
+    family-names: Pena
+  - given-names: Gabriel
+    family-names: Marques
+  - given-names: Caio
+    family-names: Cramer
+keywords:
+  - Formula SAE
+  - lap time simulation
+  - vehicle dynamics
+  - simulador de volta

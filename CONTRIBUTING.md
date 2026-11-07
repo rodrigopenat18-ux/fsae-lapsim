@@ -10,10 +10,10 @@ Por isso:
 
 - **Mudanças que não deveriam alterar resultados** (refatoração, desempenho, entrada/saída)
   precisam manter todos os testes passando **sem afrouxar tolerâncias**.
-- **Mudanças de física** (corrigir um item do [KNOWN_ISSUES.md](KNOWN_ISSUES.md), modelar
+- **Mudanças de física** (corrigir um item dos [problemas conhecidos](docs/problemas_conhecidos.md), modelar
   algo novo) entram como **opção desligada por padrão**. Assim, o comportamento original
   continua disponível e validado. Junto com a mudança, mostre o impacto no tempo de volta
-  das pistas de `data/tracks/`.
+  das pistas de `dados/pistas/`.
 
 ## Fluxo
 
@@ -29,7 +29,7 @@ Se mudar algo no `matlab/` ou no exportador, regenere as referências e explique
 no PR:
 
 ```bash
-matlab -batch "addpath('tools/matlab'); export_reference"
+matlab -batch "addpath('validacao/gerar_gabarito'); export_reference"
 ```
 
 ## Estilo
@@ -45,4 +45,4 @@ matlab -batch "addpath('tools/matlab'); export_reference"
 ## Dados
 
 Não envie dados privados da equipe (logs de aquisição, GPX, exportações do OptimumLap).
-A pasta `data/private/` é ignorada pelo Git justamente para isso.
+A pasta `dados/privado/` é ignorada pelo Git justamente para isso.

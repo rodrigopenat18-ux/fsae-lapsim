@@ -1,0 +1,4 @@
+# Gerado a partir de validacao/matlab_original/Modules/Tracks/trackSkidPad.m: 5 m de entrada + volta de 8,2 m de raio
+length_m,radius_m,slope,type
+5,0,0,straight
+51.5,8.2,0,left

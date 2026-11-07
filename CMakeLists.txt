@@ -68,44 +68,17 @@ add_library(fsae_miniz STATIC ${miniz_SOURCE_DIR}/miniz.c)
 target_include_directories(fsae_miniz SYSTEM PUBLIC ${miniz_SOURCE_DIR})
 set_target_properties(fsae_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_library(fsae_core
-    src/version.cpp
-    src/io/csv.cpp
-    src/io/car_json.cpp
-    src/io/results.cpp
-    src/io/table_import.cpp
-    src/math/interp.cpp
-    src/vehicle/engine.cpp
-    src/vehicle/car.cpp
-    src/physics/load_transfer.cpp
-    src/physics/brake_thermal.cpp
-    src/control/gearbox.cpp
-    src/physics/longitudinal.cpp
-    src/sim/straight.cpp
-    src/sim/lap.cpp
-    src/track/track.cpp
-    src/track/corner_speed.cpp
-    src/track/geometry.cpp
-    src/track/gpx.cpp
-)
-add_library(fsae::core ALIAS fsae_core)
-target_include_directories(fsae_core
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
-target_link_libraries(fsae_core PRIVATE fsae_compile_options nlohmann_json::nlohmann_json fsae_miniz)
-
-configure_file(cmake/version_config.hpp.in
-               ${CMAKE_CURRENT_BINARY_DIR}/generated/fsae/version_config.hpp @ONLY)
+# A física do simulador (biblioteca fsae::core)
+add_subdirectory(simulador)
 
 # ---------------------------------------------------------------------------
-# Executável
+# Programas
 # ---------------------------------------------------------------------------
 if(FSAE_BUILD_APPS)
-    add_subdirectory(apps/fsae_sim)
+    add_subdirectory(programas/linha_de_comando)
 endif()
 if(FSAE_BUILD_GUI)
-    add_subdirectory(apps/fsae_gui)
+    add_subdirectory(programas/interface)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -113,5 +86,5 @@ endif()
 # ---------------------------------------------------------------------------
 if(FSAE_BUILD_TESTS)
     enable_testing()
-    add_subdirectory(tests)
+    add_subdirectory(validacao/testes)
 endif()

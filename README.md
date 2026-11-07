@@ -14,7 +14,7 @@ São dois programas, os dois em C++:
   telemetria, o mapa da pista, o diagrama G-G, as curvas e a comparação entre setups;
 - **`fsae_sim`**, a linha de comando: para rodar em lote, em scripts ou num otimizador.
 
-![Interface gráfica: telemetria da volta lançada](docs/img/gui_telemetria.png)
+![Interface gráfica: telemetria da volta lançada](docs/imagens/gui_telemetria.png)
 
 *English summary: Formula SAE point-mass lap time simulator in C++17, ported from a MATLAB
 simulator and validated against it bit for bit. Desktop GUI (Dear ImGui + ImPlot) to edit
@@ -45,6 +45,7 @@ Tempos medidos no computador de desenvolvimento (Windows 11); MATLAB R2026a, C++
 - [Usar como biblioteca](#usar-como-biblioteca)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Limitações e próximos passos](#limitações-e-próximos-passos)
+- [Autores](#autores)
 
 ## Instalação
 
@@ -84,14 +85,14 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-Os executáveis ficam em `build/release/apps/fsae_gui/fsae_gui.exe` (interface) e
-`build/release/apps/fsae_sim/fsae_sim.exe` (linha de comando).
+Os executáveis ficam em `build/release/programas/interface/fsae_gui.exe` (interface) e
+`build/release/programas/linha_de_comando/fsae_sim.exe` (linha de comando).
 
 ## Interface gráfica
 
-Abra `fsae_gui.exe` com um duplo clique. Ele procura a pasta `data` (carros e pistas)
+Abra `fsae_gui.exe` com um duplo clique. Ele procura a pasta `dados` (carros e pistas)
 subindo a partir da pasta do executável. Se copiar o `.exe` para outro lugar, leve a pasta
-`data` junto ou defina a variável de ambiente `FSAE_DATA_DIR`.
+`dados` junto ou defina a variável de ambiente `FSAE_DATA_DIR`.
 
 **Menus.**
 
@@ -103,7 +104,7 @@ subindo a partir da pasta do executável. Se copiar o `.exe` para outro lugar, l
 **Painel da esquerda, aba Simulação:**
 
 1. **Carro:** qual está em uso. Os botões levam para a aba Carros ou abrem a edição.
-2. **Pista e prova:** escolha uma pista de `data/tracks` ou abra qualquer CSV (os três
+2. **Pista e prova:** escolha uma pista de `dados/pistas` ou abra qualquer CSV (os três
    formatos da seção [Pistas](#pistas)), a prova, o número de voltas e o segmento de
    largada.
 3. **Rodar:**
@@ -118,7 +119,7 @@ subindo a partir da pasta do executável. Se copiar o `.exe` para outro lugar, l
 
 - **Novo**, **Duplicar** (para testar uma variação sem perder o original), **Abrir
   arquivo...**, **Salvar** e **Salvar como...**.
-- A lista dos carros em `data/cars`: um clique carrega o carro. Se houver alterações não
+- A lista dos carros em `dados/carros`: um clique carrega o carro. Se houver alterações não
   salvas, o programa pergunta antes de trocar.
 - Um resumo do carro: massa, Cl·A/Cd·A, downforce a 100 km/h, atrito, marchas, torque e
   potência máximos.
@@ -138,7 +139,7 @@ uma aba por grupo:
 Passe o mouse sobre um campo para ver o nome no MATLAB. Valores inválidos aparecem em
 vermelho e bloqueiam a simulação. **Desfazer alterações** volta ao último estado salvo.
 
-![Dados do carro: aba Motor](docs/img/gui_editor_motor.png)
+![Dados do carro: aba Motor](docs/imagens/gui_editor_motor.png)
 
 **Importar curvas.** Nas abas Transmissão e Motor (e no menu Carro), **Importar
 planilha...** aceita:
@@ -157,7 +158,7 @@ Na janela de importação:
 Linhas de título acima do cabeçalho e colunas de texto são ignoradas. Rotações repetidas
 geram aviso.
 
-![Importação de uma curva de torque de um arquivo Excel](docs/img/gui_importar.png)
+![Importação de uma curva de torque de um arquivo Excel](docs/imagens/gui_importar.png)
 
 **Abas de gráficos.** Em todas dá para escolher a volta (última, todas ou uma
 específica), dar zoom com a roda do mouse e arrastar.
@@ -173,11 +174,11 @@ específica), dar zoom com a roda do mouse e arrastar.
 | Motor | torque, potência e BSFC do carro em edição, e rotação × velocidade em cada marcha |
 | Execuções | tabela com todas as execuções: renomear, esconder, salvar, remover ou copiar o carro de volta para o editor |
 
-![Comparação entre dois setups (Cl·A +20%)](docs/img/gui_compara.png)
+![Comparação entre dois setups (Cl·A +20%)](docs/imagens/gui_compara.png)
 
-![Mapa da pista com o mapa de cores Turbo](docs/img/gui_mapa.png)
+![Mapa da pista com o mapa de cores Turbo](docs/imagens/gui_mapa.png)
 
-![Tema escuro: velocidade nas curvas](docs/img/gui_escuro_curvas.png)
+![Tema escuro: velocidade nas curvas](docs/imagens/gui_escuro_curvas.png)
 
 ## Uso rápido (linha de comando)
 
@@ -186,7 +187,7 @@ fsae_sim run --track autox
 ```
 
 ```
-Resultados gravados em results/autox
+Resultados gravados em resultados/autox
 
 ----------------------------------------
 Pista: autox (autocross, 2 voltas, 1049.05 m por volta)
@@ -207,7 +208,7 @@ Outros exemplos:
 
 ```bash
 fsae_sim run --track skidpad
-fsae_sim run --track acceleration --car meu_carro.json --out results/accel_setupB
+fsae_sim run --track acceleration --car meu_carro.json --out resultados/accel_setupB
 fsae_sim run --track autox_2024_v1 --laps 5 --start-segment 10
 fsae_sim run --track minha_pista.csv --event custom --verbose
 fsae_sim run --track autox --json --no-files        # resumo em JSON na saída padrão
@@ -218,7 +219,7 @@ fsae_sim run --track autox --json --no-files        # resumo em JSON na saída p
 | Comando | O que faz |
 |---|---|
 | `run --track <pista> [opções]` | simula e grava os resultados |
-| `list-tracks` | lista as pistas de `data/tracks` |
+| `list-tracks` | lista as pistas de `dados/pistas` |
 | `check-track <arquivo>` | valida uma pista e mostra número de segmentos, curvas e comprimento |
 | `convert-track <entrada> <saída.csv> [comentário]` | converte uma pista (trackExcel/OptimumLap ou matriz do MATLAB) para o CSV do projeto |
 | `gpx-slope <pista> <arquivo.gpx> <saída.csv>` | preenche a inclinação dos segmentos a partir da altitude de um GPX |
@@ -230,20 +231,20 @@ Opções do `run`:
 
 | Opção | Padrão | Descrição |
 |---|---|---|
-| `--track <arquivo\|nome>` | — | CSV da pista ou nome de uma pista de `data/tracks` |
+| `--track <arquivo\|nome>` | — | CSV da pista ou nome de uma pista de `dados/pistas` |
 | `--car <arquivo.json>` | carro do `initializeCar.m` | carro |
 | `--event <prova>` | deduzido do nome da pista | `autocross`, `skidpad`, `acceleration` ou `custom` |
 | `--laps <n>` | 2 em autocross/custom, 1 nas outras | número de voltas seguidas (a 1ª parte parada) |
 | `--start-segment <k>` | 1 | a volta começa no segmento `k` |
-| `--out <pasta>` | `results/<pista>` | onde gravar os arquivos |
+| `--out <pasta>` | `resultados/<pista>` | onde gravar os arquivos |
 | `--no-files` | — | só mostra o resumo |
 | `--json` | — | imprime o `summary.json` na saída padrão (útil para otimizadores) |
 | `--verbose` | — | relatório trecho a trecho, como o MATLAB |
 | `--quiet` | — | não imprime o resumo |
 | `--repeat <n>` | 1 | roda `n` vezes e mostra o tempo médio de execução |
 
-O programa procura as pistas por nome em `$FSAE_DATA_DIR/tracks`, `./data/tracks` e em
-`data/tracks` nas pastas acima do executável.
+O programa procura as pistas por nome em `$FSAE_DATA_DIR/pistas`, `./dados/pistas` e em
+`dados/pistas` nas pastas acima do executável.
 
 ## Arquivos de saída
 
@@ -268,18 +269,18 @@ originais do MATLAB ou num script Python.
 **MATLAB** — os gráficos originais (`plotResults`) funcionam com o resultado do C++:
 
 ```matlab
-addpath('tools/matlab')
-plotCppResult('results/autox')        % última volta, como o runSimulation
-plotCppResult('results/autox', 0)     % todas as voltas
-SimOut = loadCppResult('results/autox');   % mesmo formato do SimOut do MATLAB
+addpath('graficos/matlab')
+plotCppResult('resultados/autox')        % última volta, como o runSimulation
+plotCppResult('resultados/autox', 0)     % todas as voltas
+SimOut = loadCppResult('resultados/autox');   % mesmo formato do SimOut do MATLAB
 ```
 
 **Python** — `numpy` e `matplotlib`:
 
 ```bash
-python tools/python/plot_results.py results/autox
-python tools/python/plot_results.py results/autox --save figuras/
-python tools/python/plot_results.py results/setupA --compare results/setupB
+python graficos/python/plot_results.py resultados/autox
+python graficos/python/plot_results.py resultados/autox --save figuras/
+python graficos/python/plot_results.py resultados/setupA --compare resultados/setupB
 ```
 
 Gera telemetria vs. tempo, análise (velocidade vs. distância, diagrama G-G, mapas de
@@ -288,7 +289,7 @@ acumulada ao longo da pista entre dois ou três resultados.
 
 ## O carro (JSON)
 
-O carro padrão está em [`data/cars/default.json`](data/cars/default.json), gerado por
+O carro padrão está em [`dados/carros/default.json`](dados/carros/default.json), gerado por
 `fsae_sim print-default-car`. Para testar outra configuração, copie o arquivo, mude os
 números e passe com `--car`; não é preciso recompilar.
 
@@ -308,7 +309,7 @@ Erro: JSON do carro: chassis.cg_heigth_m: campo desconhecido (validos: wheelbase
 ## Pistas
 
 Pistas são listas de segmentos (reta ou curva à esquerda/direita, com comprimento, raio e
-inclinação). As pistas do MATLAB estão em [`data/tracks/`](data/tracks):
+inclinação). As pistas do MATLAB estão em [`dados/pistas/`](dados/pistas):
 
 | Arquivo | Origem |
 |---|---|
@@ -355,13 +356,13 @@ O GPX precisa começar na largada e seguir o mesmo sentido dos segmentos.
 ## Comparar com dados reais
 
 ```bash
-python tools/python/plot_results.py results/autox --log log_autox.csv
-python tools/python/plot_results.py results/accel --log log_acceleration.csv --oplap Pista_Accel_OPLap.csv
+python graficos/python/plot_results.py resultados/autox --log log_autox.csv
+python graficos/python/plot_results.py resultados/accel --log log_acceleration.csv --oplap Pista_Accel_OPLap.csv
 ```
 
 ```matlab
-compareCppResult('results/autox', 'log_autox.csv')                 % plotComparison original
-compareCppResult('results/autox', 'Pista_AutoX_OPLap.csv', 'oplap')
+compareCppResult('resultados/autox', 'log_autox.csv')                 % plotComparison original
+compareCppResult('resultados/autox', 'Pista_AutoX_OPLap.csv', 'oplap')
 ```
 
 O log de aquisição é um CSV com cabeçalho. As colunas são reconhecidas pelo início do nome,
@@ -381,9 +382,9 @@ A exportação do OptimumLap é lida a partir da seção `[Simulation Results]`.
 
 ## Validação contra o MATLAB
 
-O simulador original fica em [`matlab/`](matlab) e não é modificado.
-[`tools/matlab/export_reference.m`](tools/matlab/export_reference.m) roda o MATLAB e grava
-em [`tests/reference/`](tests/reference) as entradas e saídas de cada função, de 10 retas
+O simulador original fica em [`validacao/matlab_original/`](validacao/matlab_original) e não é modificado.
+[`validacao/gerar_gabarito/export_reference.m`](validacao/gerar_gabarito/export_reference.m) roda o MATLAB e grava
+em [`validacao/gabarito/`](validacao/gabarito) as entradas e saídas de cada função, de 10 retas
 e das 5 pistas completas. Os testes (`ctest`) comparam o C++ com esses arquivos:
 
 - quase tudo é **idêntico bit a bit** (tolerância zero), inclusive tempos, posições,
@@ -392,26 +393,26 @@ e das 5 pistas completas. Os testes (`ctest`) comparam o C++ com esses arquivos:
   do disco. O `pow` do MATLAB não é arredondado corretamente nesses casos, e isso não
   afeta o movimento do carro.
 
-Detalhes em [`tests/reference/README.md`](tests/reference/README.md). Para regenerar:
+Detalhes em [`validacao/gabarito/README.md`](validacao/gabarito/README.md). Para regenerar:
 
 ```bash
-matlab -batch "addpath('tools/matlab'); export_reference"
+matlab -batch "addpath('validacao/gerar_gabarito'); export_reference"
 ```
 
 A correspondência entre cada função MATLAB e seu equivalente em C++ está em
-[`docs/matlab_mapping.md`](docs/matlab_mapping.md).
+[`docs/mapa_matlab_cpp.md`](docs/mapa_matlab_cpp.md).
 
 ## Usar como biblioteca
 
 A física está na biblioteca `fsae::core`, separada do programa de linha de comando:
 
 ```cpp
-#include "fsae/io/car_json.hpp"
-#include "fsae/sim/lap.hpp"
-#include "fsae/track/track.hpp"
+#include "arquivos/car_json.hpp"
+#include "simulacao/lap.hpp"
+#include "pista/track.hpp"
 
 const fsae::Car car = fsae::io::load_car("meu_carro.json");
-const auto track = fsae::track::load_track("data/tracks/autox.csv");
+const auto track = fsae::track::load_track("dados/pistas/autox.csv");
 fsae::sim::SimulationOptions opt;
 opt.laps = 2;
 const auto r = fsae::sim::simulate(car, track.segments, opt);
@@ -424,31 +425,40 @@ Com `add_subdirectory` ou `FetchContent` no CMake, ligue a `fsae::core` (use
 ## Estrutura do projeto
 
 ```
-include/fsae/      cabeçalhos públicos
-  vehicle/         carro e mapas do motor
-  physics/         forças, cargas, motor/freio, temperatura do disco, passo de integração
-  control/         câmbio
-  track/           pistas, velocidade de curva, traçado, GPX
-  sim/             reta e volta completa
-  io/              CSV, JSON do carro, arquivos de resultado
-src/               implementação
-apps/fsae_gui/     interface gráfica (Dear ImGui + ImPlot)
-apps/fsae_sim/     programa de linha de comando
-tests/             testes (doctest) e dados de referência do MATLAB
-tools/matlab/      geração das referências, leitura dos resultados e gráficos no MATLAB
-tools/python/      gráficos em Python
-data/cars/         carros
-data/tracks/       pistas
-data/private/      dados da equipe (logs, GPX, OptimumLap); fora do Git
-matlab/            simulador MATLAB original (referência)
-docs/              documentação e imagens
+simulador/          a física em C++ (biblioteca fsae::core); cada .hpp ao lado do seu .cpp
+  carro/            parâmetros do carro e mapas do motor
+  fisica/           forças, cargas nos pneus, motor/freio, temperatura do disco, passo de tempo
+  cambio/           marcha inicial, subida, redução, tempo de troca
+  pista/            segmentos, velocidade máxima de curva, traçado, GPX
+  simulacao/        reta e volta completa
+  arquivos/         leitura e gravação: JSON do carro, CSV, planilhas Excel, resultados
+  matematica/       interpolação (pchip e linear, iguais ao MATLAB)
+programas/
+  interface/        fsae_gui: a interface gráfica
+  linha_de_comando/ fsae_sim: para rodar em lote, em scripts ou num otimizador
+dados/
+  carros/           carros (.json)
+  pistas/           pistas (.csv)
+  privado/          dados da equipe (logs, GPX, OptimumLap); só no seu computador, fora do Git
+graficos/           ferramentas opcionais para analisar resultados fora da interface
+  matlab/           loadCppResult, plotCppResult, compareCppResult
+  python/           plot_results.py
+validacao/          tudo que garante que o C++ dá o mesmo resultado do MATLAB
+  matlab_original/  o simulador MATLAB original, sem modificações
+  gerar_gabarito/   scripts MATLAB que geram o gabarito
+  gabarito/         saídas do MATLAB usadas pelos testes
+  testes/           testes em C++ (doctest)
+docs/               problemas conhecidos, mapa MATLAB → C++ e imagens
 ```
+
+Cada pasta tem um `README.md` curto explicando o que há dentro. A pasta `build/` aparece
+depois de compilar; ela não vai para o Git e pode ser apagada a qualquer momento.
 
 ## Limitações e próximos passos
 
 O port é **fiel** ao MATLAB, inclusive nos comportamentos que precisam ser melhorados (o
 objetivo desta versão é garantir os mesmos resultados). Eles estão listados em
-[KNOWN_ISSUES.md](KNOWN_ISSUES.md): inclinação tratada como porcentagem no cálculo das
+[problemas conhecidos](docs/problemas_conhecidos.md): inclinação tratada como porcentagem no cálculo das
 curvas, velocidade zero em curvas de raio grande, rpm acima do limite nas reduções etc.
 
 Planejado:
@@ -457,6 +467,15 @@ Planejado:
 - melhorias de física (acelerar e frear dentro das curvas, transição entre curvas);
 - prova de endurance (autocross + 25 voltas — o número de voltas já é parâmetro);
 - integração com otimizadores (modeFRONTIER) usando `--json`.
+
+## Autores
+
+- **Rodrigo Pena**: desenvolvimento
+- **Gabriel Marques**: desenvolvimento
+- **Caio Cramer**: orientação
+
+Para citar em trabalhos acadêmicos, use o botão *Cite this repository* do GitHub (arquivo
+[`CITATION.cff`](CITATION.cff)).
 
 ## Licença
 
