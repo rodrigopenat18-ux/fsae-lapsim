@@ -226,6 +226,23 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
     info.event = fsae::sim::to_string(event);
     info.start_segment = a.start_segment;
 
+    // Curvas sem velocidade possível (KNOWN_ISSUES.md, item 2): o tempo não é confiável.
+    std::size_t zero_corners = 0;
+    double min_radius_zero = 1e300;
+    for (std::size_t k = 0; k < segments.size(); ++k) {
+        if (segments[k].is_corner() && !(result.corner_speeds[k].v_max > 0)) {
+            ++zero_corners;
+            min_radius_zero = std::min(min_radius_zero, segments[k].radius);
+        }
+    }
+    if (zero_corners > 0) {
+        std::fprintf(stderr,
+                     "AVISO: %zu curva(s) com velocidade maxima 0 (raio >= %.1f m). O modelo do "
+                     "MATLAB zera a aderencia em raios grandes (KNOWN_ISSUES.md, item 2); o carro "
+                     "passa nelas a 0,1 m/s e o tempo de volta nao e confiavel.\n",
+                     zero_corners, min_radius_zero);
+    }
+
     if (a.write_files) {
         const fs::path out = a.out.empty() ? fs::path("results") / track.name : fs::path(a.out);
         fsae::io::write_telemetry_csv(out / "telemetry.csv", result);
