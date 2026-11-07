@@ -1,0 +1,13 @@
+{
+  "matlab_version": "26.1.0.3251617 (R2026a) Update 2",
+  "computer": "PCWIN64",
+  "generated_at": "2026-11-07 08:34:48",
+  "timings_s": {
+    "straight_cases": 1.6371546,
+    "sim_autox": 4.3228053,
+    "sim_skidpad": 0.4226642,
+    "sim_acceleration": 0.307277,
+    "sim_autox2024v1": 3.8311141,
+    "sim_autox2024v1_rev": 3.6505177
+  }
+}
