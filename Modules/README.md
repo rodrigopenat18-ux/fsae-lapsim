@@ -9,7 +9,7 @@ gráfica, pela linha de comando e pelos testes.
 | `Physics/` | arrasto, downforce, rampa, rolamento, cargas nos pneus, motor, freio, aderência, temperatura do disco, passo acelerando/freando |
 | `Control/` | câmbio: marcha inicial, subida, redução, tempo de troca, two-step |
 | `Tracks/` | segmentos, leitura de pistas, velocidade máxima de curva, traçado X/Y/Z, inclinação por GPX |
-| `Simulation/` | reta completa e volta completa com N voltas |
+| `Simulation/` | modelo original (reta no tempo e volta completa com N voltas, `lap`, `straight`) e modelo melhorado quase-estático (`quasi_static`), com endurance |
 | `IO_Tools/` | JSON do carro, CSV, planilhas Excel, gravação dos resultados |
 | `Math/` | interpolação pchip e linear, `linspace` |
 

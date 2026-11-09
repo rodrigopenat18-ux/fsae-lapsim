@@ -80,6 +80,8 @@ std::string summary_json(const sim::SimulationResult& r, const RunInfo& info) {
                   {"length_m", r.track_length},
                   {"start_segment", info.start_segment}};
     j["event"] = info.event;
+    j["model"] = info.model;
+    j["fuel_load_kg"] = info.fuel_load_kg;
     j["laps"] = r.laps;
     j["results"] = {
         {"total_time_s", json_number(r.total_time)},
@@ -90,6 +92,7 @@ std::string summary_json(const sim::SimulationResult& r, const RunInfo& info) {
         {"max_brake_temp_c", json_number(r.max_brake_temp)},
         {"total_fuel_g", json_number(r.total_fuel_g)},
         {"lap_fuel_g", json_array(r.lap_fuel_g)},
+        {"lap_mass_kg", json_array(r.lap_mass_kg)},
     };
     // Mesmos nomes do SimOut.Results do MATLAB (Lap2_Time = 0 com uma volta só)
     j["matlab_results"] = {

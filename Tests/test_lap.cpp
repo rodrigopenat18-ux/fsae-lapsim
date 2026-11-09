@@ -158,5 +158,6 @@ TEST_CASE("prova: voltas padrao e nomes") {
     CHECK(sim::default_laps(sim::Event::Acceleration) == 1);
     CHECK(sim::parse_event("autox") == sim::Event::Autocross);
     CHECK(sim::parse_event("skidpad") == sim::Event::Skidpad);
-    CHECK_THROWS((void)sim::parse_event("endurance"));
+    CHECK(sim::default_laps(sim::Event::Endurance) == 25);
+    CHECK_THROWS((void)sim::parse_event("drag-race"));
 }

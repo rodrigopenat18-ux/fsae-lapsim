@@ -13,12 +13,12 @@
 namespace fsae::sim {
 
 /// Provas. Define o número padrão de voltas (MATLAB: 2 em autocross/pista customizada,
-/// 1 em skidpad/aceleração).
-enum class Event { Autocross, Skidpad, Acceleration, Custom };
+/// 1 em skidpad/aceleração; endurance: 25 voltas seguidas, largada parada).
+enum class Event { Autocross, Skidpad, Acceleration, Endurance, Custom };
 
 [[nodiscard]] int default_laps(Event event) noexcept;
 [[nodiscard]] const char* to_string(Event event) noexcept;
-/// "autocross", "skidpad", "acceleration" ou "custom" (lança std::invalid_argument).
+/// "autocross", "skidpad", "acceleration", "endurance" ou "custom" (lança std::invalid_argument).
 [[nodiscard]] Event parse_event(const std::string& name);
 
 /// Modelo de simulação.
@@ -47,6 +47,10 @@ struct SimulationOptions {
     ModelOptions model;
     /// Passo de distância do modelo melhorado [m].
     double step_m = 0.25;
+    /// Combustível no tanque na largada [kg]. No modelo melhorado a massa cai a cada volta
+    /// com o combustível gasto (tanque suposto no CG); no original entra como massa
+    /// constante. 0 = massa do carro como está.
+    double fuel_load_kg = 0;
 };
 
 /// Telemetria da simulação inteira, um elemento por amostra.
@@ -95,6 +99,7 @@ struct SimulationResult {
     std::vector<double> lap_times;
     std::vector<double> lap_fuel_g;            ///< consumo de cada volta [g]
     std::vector<std::size_t> lap_start_index;  ///< primeira amostra de cada volta
+    std::vector<double> lap_mass_kg;           ///< massa do carro usada em cada volta [kg]
     /// Volta mais rápida (FastestLap): a menor entre a 2ª e a última volta (no MATLAB,
     /// com 2 voltas, é a 2ª); com 1 volta, o tempo total.
     double fastest_lap = 0;

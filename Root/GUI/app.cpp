@@ -25,9 +25,13 @@ namespace {
 
 constexpr int kMaxRuns = 8;
 
-const char* const kEvents[] = {"Autocross", "Skidpad", "Aceleração", "Pista customizada"};
+const char* const kEvents[] = {"Autocross", "Skidpad", "Aceleração", "Endurance", "Pista customizada"};
 constexpr fsae::sim::Event kEventValues[] = {fsae::sim::Event::Autocross, fsae::sim::Event::Skidpad,
-                                             fsae::sim::Event::Acceleration, fsae::sim::Event::Custom};
+                                             fsae::sim::Event::Acceleration, fsae::sim::Event::Endurance,
+                                             fsae::sim::Event::Custom};
+
+const char* const kModels[] = {"Melhorado", "Original (MATLAB)"};
+constexpr fsae::sim::Solver kModelValues[] = {fsae::sim::Solver::QuasiStatic, fsae::sim::Solver::Original};
 
 std::string sanitize(std::string s) {
     for (char& c : s) {
@@ -421,6 +425,10 @@ void App::run_simulation(bool replace_last) {
         const fsae::Car car = fsae::Car::from_spec(spec_);
         fsae::sim::SimulationOptions opt;
         opt.laps = laps_;
+        opt.solver = kModelValues[model_];
+        opt.fuel_load_kg = fuel_kg_;
+        r.model = fsae::sim::to_string(opt.solver);
+        r.fuel_kg = fuel_kg_;
         const auto t0 = std::chrono::steady_clock::now();
         r.result = fsae::sim::simulate(car, r.segments, opt);
         r.sim_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -433,7 +441,8 @@ void App::run_simulation(bool replace_last) {
             }
         }
         for (std::size_t k = 0; k < r.segments.size(); ++k) {
-            if (r.segments[k].is_corner() && !(r.result.corner_speeds[k].v_max > 0)) {
+            if (opt.solver == fsae::sim::Solver::Original && r.segments[k].is_corner() &&
+                !(r.result.corner_speeds[k].v_max > 0)) {
                 r.zero_speed_corners.push_back(k + 1);
             }
         }
@@ -452,7 +461,8 @@ void App::run_simulation(bool replace_last) {
             r.color_slot = static_cast<int>(std::find(used.begin(), used.end(), false) - used.begin());
             r.id = next_run_id_++;
             char label[160];
-            std::snprintf(label, sizeof label, "#%d %s - %s", r.id, r.track_name.c_str(), r.car_name.c_str());
+            std::snprintf(label, sizeof label, "#%d %s - %s (%s)", r.id, r.track_name.c_str(), r.car_name.c_str(),
+                          r.model.c_str());
             r.label = label;
             runs_.push_back(std::move(r));
         }
@@ -471,6 +481,8 @@ void App::save_results(const Run& r) {
         info.car_name = r.car_name;
         info.track_name = r.track_name;
         info.event = r.event;
+        info.model = r.model;
+        info.fuel_load_kg = r.fuel_kg;
         fsae::io::write_telemetry_csv(out / "telemetry.csv", r.result);
         fsae::io::write_summary_json(out / "summary.json", r.result, info);
         fsae::io::write_segments_csv(out / "track.csv", r.segments, r.result);
@@ -697,15 +709,27 @@ bool App::track_selector() {
         ImGui::TextDisabled("%zu segmentos, %zu curvas, %.1f m", track_.segments.size(), corners, track_.length());
     }
     if (begin_form("prova")) {
+        row_label("Modelo",
+                  "Melhorado: quase-estático em distância, com elipse de atrito, aceleração e\n"
+                  "frenagem dentro das curvas e freio nos dois eixos (docs/modelo_melhorado.md).\n"
+                  "Original: idêntico à versão em MATLAB (curvas a velocidade constante).");
+        if (ImGui::Combo("##modelo", &model_, kModels, IM_ARRAYSIZE(kModels))) ch = true;
         row_label("Prova", "Define o número padrão de voltas");
         if (ImGui::Combo("##prova", &event_, kEvents, IM_ARRAYSIZE(kEvents))) {
             if (laps_auto_) laps_ = fsae::sim::default_laps(kEventValues[event_]);
             ch = true;
         }
-        row_label("Voltas", "A primeira volta parte parada. Endurance: autocross com mais voltas.");
+        row_label("Voltas", "A primeira volta parte parada; as seguintes, lançadas. Endurance: 25.");
         if (ImGui::InputInt("##voltas", &laps_)) {
             laps_ = std::clamp(laps_, 1, 100);
             laps_auto_ = false;
+            ch = true;
+        }
+        row_label("Combustível na largada [kg]",
+                  "Modelo melhorado: a massa cai a cada volta com o combustível gasto (tanque no CG).\n"
+                  "Modelo original: entra como massa constante. 0 = massa do carro como está.");
+        if (ImGui::InputDouble("##combustivel", &fuel_kg_, 0.5, 1.0, "%.2f")) {
+            fuel_kg_ = std::clamp(fuel_kg_, 0.0, 50.0);
             ch = true;
         }
         row_label("Segmento de largada", "A volta começa neste segmento (circshift do MATLAB)");
@@ -750,6 +774,20 @@ void App::panel_results() {
         line("Acel. lateral máxima", "%.3f g", res.max_lat_g);
         line("Temp. máxima do disco", "%.1f °C", res.max_brake_temp);
         line("Consumo total", "%.2f g", res.total_fuel_g);
+        if (r->fuel_kg > 0 && !res.lap_mass_kg.empty()) {
+            line("Massa na 1ª volta", "%.1f kg", res.lap_mass_kg.front());
+            line("Massa na última volta", "%.1f kg", res.lap_mass_kg.back());
+            if (res.total_fuel_g / 1000 > r->fuel_kg) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(color_warning(), "O combustível acaba antes do fim");
+            }
+        }
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Modelo");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextUnformatted(r->model.c_str());
         line("Tempo de cálculo", "%.2f ms", r->sim_ms);
         ImGui::EndTable();
     }

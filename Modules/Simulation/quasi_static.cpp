@@ -296,8 +296,31 @@ struct Step {
 
 SimulationResult simulate_quasi_static(const Car& car, const std::vector<track::Segment>& segments,
                                        const SimulationOptions& options) {
-    return simulate_quasi_static(std::vector<Car>(static_cast<std::size_t>(options.laps), car),
-                                 segments, options);
+    if (options.laps < 1) throw std::invalid_argument("numero de voltas deve ser >= 1");
+    const auto laps = static_cast<std::size_t>(options.laps);
+    std::vector<Car> cars(laps, car);
+    if (!(options.fuel_load_kg > 0)) return simulate_quasi_static(cars, segments, options);
+
+    // Massa caindo com o combustível: 1ª passada com o tanque cheio em todas as voltas;
+    // a 2ª usa, em cada volta, o combustível restante no meio dela pelo consumo da 1ª.
+    // (O consumo por volta muda ~0,1% com a massa, então uma correção basta.)
+    for (auto& c : cars) c.mass = car.mass + options.fuel_load_kg;
+    SimulationOptions quiet = options;
+    quiet.log = nullptr;
+    const SimulationResult first = simulate_quasi_static(cars, segments, quiet);
+    double used = 0;
+    for (std::size_t k = 0; k < laps; ++k) {
+        const double lap_kg = first.lap_fuel_g[k] / 1000;
+        const double remaining_mid = std::max(0.0, options.fuel_load_kg - used - 0.5 * lap_kg);
+        cars[k].mass = car.mass + remaining_mid;
+        used += lap_kg;
+    }
+    SimulationResult r = simulate_quasi_static(cars, segments, options);
+    if (r.total_fuel_g / 1000 > options.fuel_load_kg) {
+        logf(options.log, "[AVISO] o combustivel acaba antes do fim: %.3f kg gastos de %.3f kg\n",
+             r.total_fuel_g / 1000, options.fuel_load_kg);
+    }
+    return r;
 }
 
 SimulationResult simulate_quasi_static(const std::vector<Car>& lap_cars_in,
@@ -321,7 +344,7 @@ SimulationResult simulate_quasi_static(const std::vector<Car>& lap_cars_in,
     // --- Limites de curva (por volta: a massa pode mudar) ---
     std::vector<std::vector<double>> seg_limit(laps, std::vector<double>(segments.size(), kInf));
     for (std::size_t lap = 0; lap < laps; ++lap) {
-        if (lap > 0 && cars[lap].mass == cars[lap - 1].mass) {
+        if (lap > 0 && cars[lap].mass == cars[lap - 1].mass) {  // (os carros so diferem na massa)
             seg_limit[lap] = seg_limit[lap - 1];
             continue;
         }
@@ -512,6 +535,8 @@ SimulationResult simulate_quasi_static(const std::vector<Car>& lap_cars_in,
     r.lap_times.assign(laps, kNaN);
     r.lap_fuel_g.assign(laps, kNaN);
     r.lap_start_index.assign(laps, 0);
+    r.lap_mass_kg.resize(laps);
+    for (std::size_t k = 0; k < laps; ++k) r.lap_mass_kg[k] = cars[k].mass;
     for (std::size_t k = 0; k < laps; ++k) {
         const std::size_t a = lap_node[k], b = lap_node[k + 1];
         r.lap_start_index[k] = a;

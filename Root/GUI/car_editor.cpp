@@ -246,8 +246,13 @@ bool App::editor_chassis() {
     ImGui::SeparatorText("Pneus");
     if (begin_form("pneus")) {
         ch |= num("Atrito longitudinal estático", s.mu_x_static, "mux_static");
-        ch |= num("Atrito longitudinal cinético", s.mu_x_kinetic, "mux_kinetic: usado quando a roda patina");
+        ch |= num("Atrito longitudinal cinético", s.mu_x_kinetic,
+                  "mux_kinetic: usado quando a roda patina (só no modelo original; o melhorado "
+                  "supõe controle de tração ideal)");
         ch |= num("Atrito lateral", s.mu_y, "muy");
+        ch |= num("Sensibilidade à carga (k)", s.tyre_load_sensitivity,
+                  "Modelo melhorado: mu = mu0 * (1 - k * (Fz/Fz_estática - 1)) em cada pneu.\n"
+                  "0 = atrito constante. Pneus de FSAE: tipicamente 0,1 a 0,2.");
         ImGui::EndTable();
     }
     return ch;
@@ -394,6 +399,30 @@ bool App::editor_brakes() {
     bool ch = false;
     auto& s = spec_;
     ImGui::Spacing();
+    ImGui::SeparatorText("Sistema de freio");
+    if (begin_form("sistema_freio")) {
+        ch |= num("Torque máximo [N·m]", s.brake_max_torque_nm,
+                  "Torque de freio máximo somando as quatro rodas (o original usa 3000 N·m)");
+        row_label("Distribuição",
+                  "Ideal: cada eixo freia no seu limite, seguindo a transferência de carga\n"
+                  "longitudinal. Balanço fixo: a fração da força na dianteira é constante e o eixo\n"
+                  "que chega primeiro ao limite define a frenagem. Usado pelo modelo melhorado.");
+        bool fixed = s.brake_bias_front_percent.has_value();
+        if (ImGui::Checkbox("Balanço fixo##bias", &fixed)) {
+            if (fixed) s.brake_bias_front_percent = 60.0;
+            else s.brake_bias_front_percent.reset();
+            ch = true;
+        }
+        if (!fixed) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("ideal (transferência de carga)");
+        }
+        if (s.brake_bias_front_percent) {
+            ch |= num("Balanço na dianteira [%]", *s.brake_bias_front_percent,
+                      "Parte da força de freio no eixo dianteiro (0 a 100)");
+        }
+        ImGui::EndTable();
+    }
     ImGui::SeparatorText("Disco de freio dianteiro (modelo térmico)");
     if (begin_form("freio")) {
         ch |= num("Massa do disco [kg]", s.brake_disc_mass_kg, "brake_mass");
@@ -413,7 +442,9 @@ bool App::editor_brakes() {
         ImGui::EndTable();
     }
     ImGui::Spacing();
-    ImGui::TextDisabled("A força de frenagem é fixa no modelo do MATLAB (3000 N·m no raio do pneu).");
+    ImGui::TextDisabled("Modelo original: força de freio = torque máximo no raio do pneu, limitada pelo\n"
+                        "atrito das quatro rodas. Melhorado: limitada também pela aderência de cada\n"
+                        "eixo (elipse de atrito) e pela distribuição escolhida.");
     return ch;
 }
 

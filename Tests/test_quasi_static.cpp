@@ -303,7 +303,7 @@ TEST_CASE("curva rapida seguida de curva lenta: freia antes, sem queda instantan
     // Freou ao longo de varios metros dentro da curva rapida
     std::size_t braking = 0;
     for (std::size_t i = 0; i <= entry; ++i) braking += h.brake_force[i] > 0 ? 1 : 0;
-    CHECK(braking * 0.25 > 5.0);
+    CHECK(static_cast<double>(braking) * 0.25 > 5.0);
 }
 
 TEST_CASE("pistas: elipse respeitada, distancia exata, voltas lancadas iguais") {
@@ -382,7 +382,7 @@ TEST_CASE("modelo melhorado nao muda o original") {
     CHECK(r.lap_times[1] == doctest::Approx(45.5006).epsilon(1e-5));
     CHECK(sim::parse_solver("melhorado") == sim::Solver::QuasiStatic);
     CHECK(sim::parse_solver("original") == sim::Solver::Original);
-    CHECK_THROWS(sim::parse_solver("xyz"));
+    CHECK_THROWS((void)sim::parse_solver("xyz"));
 }
 
 TEST_CASE("JSON: campos novos sao opcionais e fazem ida e volta") {
@@ -410,8 +410,8 @@ TEST_CASE("JSON: campos novos sao opcionais e fazem ida e volta") {
     CHECK(*car.brake_bias_front == doctest::Approx(0.625));
 
     spec.brake_bias_front_percent = 120;
-    CHECK_THROWS(Car::from_spec(spec));
+    CHECK_THROWS((void)Car::from_spec(spec));
     spec.brake_bias_front_percent.reset();
     spec.tyre_load_sensitivity = 1.5;
-    CHECK_THROWS(Car::from_spec(spec));
+    CHECK_THROWS((void)Car::from_spec(spec));
 }

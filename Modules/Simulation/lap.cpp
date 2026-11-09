@@ -20,6 +20,7 @@
 namespace fsae::sim {
 
 int default_laps(Event event) noexcept {
+    if (event == Event::Endurance) return 25;
     return (event == Event::Autocross || event == Event::Custom) ? 2 : 1;
 }
 
@@ -28,6 +29,7 @@ const char* to_string(Event event) noexcept {
         case Event::Autocross: return "autocross";
         case Event::Skidpad: return "skidpad";
         case Event::Acceleration: return "acceleration";
+        case Event::Endurance: return "endurance";
         case Event::Custom: break;
     }
     return "custom";
@@ -37,9 +39,10 @@ Event parse_event(const std::string& name) {
     if (name == "autocross" || name == "autox") return Event::Autocross;
     if (name == "skidpad") return Event::Skidpad;
     if (name == "acceleration" || name == "accel") return Event::Acceleration;
+    if (name == "endurance" || name == "enduro") return Event::Endurance;
     if (name == "custom") return Event::Custom;
     throw std::invalid_argument("prova desconhecida: \"" + name +
-                                "\" (use autocross, skidpad, acceleration ou custom)");
+                                "\" (use autocross, skidpad, acceleration, endurance ou custom)");
 }
 
 const char* to_string(Solver solver) noexcept {
@@ -269,12 +272,14 @@ SimulationResult simulate(const Car& car_in, const std::vector<track::Segment>& 
                           const SimulationOptions& options) {
     if (lap_segments.empty()) throw std::invalid_argument("pista sem segmentos");
     if (options.laps < 1) throw std::invalid_argument("numero de voltas deve ser >= 1");
+    if (!(options.fuel_load_kg >= 0)) throw std::invalid_argument("combustivel deve ser >= 0 kg");
     if (options.solver == Solver::QuasiStatic) {
         return simulate_quasi_static(car_in, lap_segments, options);
     }
     std::ostream* log = options.log;
     Car car = car_in;  // as correções escolhidas valem para todos os cálculos desta simulação
     car.model = options.model;
+    car.mass += options.fuel_load_kg;  // modelo original: massa constante
 
     SimulationResult r;
     r.laps = options.laps;
@@ -409,6 +414,7 @@ SimulationResult simulate(const Car& car_in, const std::vector<track::Segment>& 
 
     r.total_time = st.total_time;
     summarize(r, lap_length, car.model.exact_segment_end);
+    r.lap_mass_kg.assign(static_cast<std::size_t>(options.laps), car.mass);
     return r;
 }
 

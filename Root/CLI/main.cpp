@@ -43,10 +43,15 @@ Uso:
 Opcoes do run:
   --track <arquivo|nome>   CSV da pista, ou nome de uma pista de Data/Tracks (ex.: autox)
   --car <arquivo.json>     carro (padrao: carro de 2024, Data/Cars/default.json)
-  --event <prova>          autocross | skidpad | acceleration | custom
+  --model <modelo>         melhorado (padrao: quase-estatico, com elipse de atrito)
+                           ou original (identico ao MATLAB)
+  --event <prova>          autocross | skidpad | acceleration | endurance | custom
                            (padrao: deduzido do nome da pista; autocross se nao for
                            skidpad/acceleration)
-  --laps <n>               numero de voltas (padrao: 2 em autocross/custom, 1 nas outras)
+  --laps <n>               numero de voltas (padrao: 2 em autocross/custom, 25 no
+                           endurance, 1 nas outras)
+  --fuel <kg>              combustivel no tanque na largada; no modelo melhorado a massa
+                           cai a cada volta com o consumo (padrao: 0)
   --start-segment <k>      a volta comeca no segmento k (padrao: 1)
   --out <pasta>            pasta dos resultados (padrao: Results/<pista>)
   --no-files               nao grava arquivos, so mostra o resumo
@@ -103,6 +108,8 @@ struct RunArgs {
     std::string car;
     std::optional<std::string> event;
     std::optional<int> laps;
+    std::string model = "melhorado";
+    double fuel_kg = 0;
     int start_segment = 1;
     std::string out;
     bool write_files = true;
@@ -122,6 +129,16 @@ int to_int(const std::string& s, const std::string& opt) {
     usage_error(opt + " espera um numero inteiro, recebeu \"" + s + "\"");
 }
 
+double to_double(const std::string& s, const std::string& opt) {
+    try {
+        std::size_t pos = 0;
+        const double v = std::stod(s, &pos);
+        if (pos == s.size()) return v;
+    } catch (const std::exception&) {
+    }
+    usage_error(opt + " espera um numero, recebeu \"" + s + "\"");
+}
+
 RunArgs parse_run(const std::vector<std::string>& args) {
     RunArgs a;
     for (std::size_t i = 0; i < args.size(); ++i) {
@@ -134,6 +151,8 @@ RunArgs parse_run(const std::vector<std::string>& args) {
         else if (o == "--car") a.car = value();
         else if (o == "--event") a.event = value();
         else if (o == "--laps") a.laps = to_int(value(), o);
+        else if (o == "--model") a.model = value();
+        else if (o == "--fuel") a.fuel_kg = to_double(value(), o);
         else if (o == "--start-segment") a.start_segment = to_int(value(), o);
         else if (o == "--out") a.out = value();
         else if (o == "--no-files") a.write_files = false;
@@ -147,11 +166,16 @@ RunArgs parse_run(const std::vector<std::string>& args) {
     return a;
 }
 
-void print_summary(const fsae::sim::SimulationResult& r, const std::string& track,
-                   const std::string& event, double elapsed_ms) {
+void print_summary(const fsae::sim::SimulationResult& r, const fsae::io::RunInfo& info,
+                   double elapsed_ms) {
     std::printf("\n----------------------------------------\n");
-    std::printf("Pista: %s (%s, %d volta%s, %.2f m por volta)\n", track.c_str(), event.c_str(),
-                r.laps, r.laps > 1 ? "s" : "", r.track_length);
+    std::printf("Pista: %s (%s, %d volta%s, %.2f m por volta)\n", info.track_name.c_str(),
+                info.event.c_str(), r.laps, r.laps > 1 ? "s" : "", r.track_length);
+    std::printf("Modelo: %s\n", info.model.c_str());
+    if (info.fuel_load_kg > 0) {
+        std::printf("Combustivel na largada: %.2f kg (massa %.1f -> %.1f kg)\n", info.fuel_load_kg,
+                    r.lap_mass_kg.front(), r.lap_mass_kg.back());
+    }
     if (r.laps > 1) {
         for (int k = 0; k < r.laps; ++k) {
             char label[32];
@@ -199,6 +223,13 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
     fsae::sim::SimulationOptions opt;
     opt.laps = a.laps.value_or(fsae::sim::default_laps(event));
     opt.log = a.verbose ? &std::cout : nullptr;
+    try {
+        opt.solver = fsae::sim::parse_solver(a.model);
+    } catch (const std::invalid_argument& e) {
+        usage_error(e.what());
+    }
+    if (a.fuel_kg < 0) usage_error("--fuel deve ser >= 0");
+    opt.fuel_load_kg = a.fuel_kg;
 
     if (a.repeat < 1) usage_error("--repeat deve ser >= 1");
     if (a.repeat > 1) opt.log = nullptr;
@@ -225,6 +256,8 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
     info.track_file = track_path.generic_string();
     info.event = fsae::sim::to_string(event);
     info.start_segment = a.start_segment;
+    info.model = fsae::sim::to_string(opt.solver);
+    info.fuel_load_kg = opt.fuel_load_kg;
 
     // Curvas sem velocidade possível (docs/problemas_conhecidos.md, item 2): o tempo não é confiável.
     std::size_t zero_corners = 0;
@@ -235,7 +268,7 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
             min_radius_zero = std::min(min_radius_zero, segments[k].radius);
         }
     }
-    if (zero_corners > 0) {
+    if (zero_corners > 0 && opt.solver == fsae::sim::Solver::Original) {
         std::fprintf(stderr,
                      "AVISO: %zu curva(s) com velocidade maxima 0 (raio >= %.1f m). O modelo do "
                      "MATLAB zera a aderencia em raios grandes (docs/problemas_conhecidos.md, item 2); o carro "
@@ -255,7 +288,7 @@ int cmd_run(const std::vector<std::string>& args, const char* argv0) {
     if (a.print_json) {
         std::cout << fsae::io::summary_json(result, info);
     } else if (!a.quiet) {
-        print_summary(result, track.name, info.event, elapsed_ms);
+        print_summary(result, info, elapsed_ms);
     }
     return 0;
 }

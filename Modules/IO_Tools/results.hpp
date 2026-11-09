@@ -20,6 +20,8 @@ struct RunInfo {
     std::string track_file;
     std::string event;
     int start_segment = 1;
+    std::string model = "original";  ///< "original" ou "melhorado"
+    double fuel_load_kg = 0;         ///< combustivel na largada [kg]
 };
 
 /// telemetry.csv: uma linha por amostra, colunas com os nomes do `SimOut.History` do

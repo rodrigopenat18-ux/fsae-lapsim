@@ -20,6 +20,7 @@ add_executable(fsae_tests
     test_table_import.cpp
     test_model_fixes.cpp
     test_quasi_static.cpp
+    test_endurance.cpp
 )
 target_include_directories(fsae_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fsae_tests PRIVATE fsae::core doctest::doctest nlohmann_json::nlohmann_json
@@ -38,10 +39,22 @@ if(FSAE_BUILD_APPS)
     add_test(NAME cli_run_skidpad
              COMMAND fsae_sim run --track ${PROJECT_SOURCE_DIR}/Data/Tracks/skidpad.csv --no-files)
     add_test(NAME cli_run_autox_json
-             COMMAND fsae_sim run --track autox --json --no-files)
+             COMMAND fsae_sim run --track autox --model original --json --no-files)
     set_tests_properties(cli_run_autox_json PROPERTIES
         ENVIRONMENT "FSAE_DATA_DIR=${PROJECT_SOURCE_DIR}/Data"
         PASS_REGULAR_EXPRESSION "\"Lap2_Time\": 45[.]5006")
+    add_test(NAME cli_run_autox_melhorado
+             COMMAND fsae_sim run --track autox --json --no-files)
+    set_tests_properties(cli_run_autox_melhorado PROPERTIES
+        ENVIRONMENT "FSAE_DATA_DIR=${PROJECT_SOURCE_DIR}/Data"
+        PASS_REGULAR_EXPRESSION "\"model\": \"melhorado\"")
+    add_test(NAME cli_run_endurance
+             COMMAND fsae_sim run --track autox --event endurance --fuel 4 --no-files)
+    set_tests_properties(cli_run_endurance PROPERTIES
+        ENVIRONMENT "FSAE_DATA_DIR=${PROJECT_SOURCE_DIR}/Data"
+        PASS_REGULAR_EXPRESSION "25 voltas")
+    add_test(NAME cli_bad_model COMMAND fsae_sim run --track autox --model xyz --no-files)
+    set_tests_properties(cli_bad_model PROPERTIES WILL_FAIL TRUE)
     add_test(NAME cli_bad_option COMMAND fsae_sim run --track autox --bogus)
     set_tests_properties(cli_bad_option PROPERTIES WILL_FAIL TRUE)
 endif()

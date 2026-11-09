@@ -24,8 +24,8 @@ Estas são tratadas pelo [modelo melhorado](modelo_melhorado.md) (`Solver::Quasi
 - A frenagem e a aceleração não dividem a aderência com a curva (sem elipse de atrito).
 - Tração cai de μ estático para μ cinético quando a força do motor passa da aderência estática.
 - O pneu tem atrito constante (sem sensibilidade à carga).
-- Não há modo endurance completo (planejado: 25 voltas, com a massa caindo pelo
-  combustível consumido). O número de voltas já é parâmetro (`--laps`).
+- Não há endurance com a massa caindo pelo combustível consumido (o melhorado tem:
+  prova `endurance`, 25 voltas, `--fuel`).
 
 ## Observações sobre os dados das pistas
 

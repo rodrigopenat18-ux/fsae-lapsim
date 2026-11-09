@@ -35,6 +35,8 @@ struct Run {
     std::string track_name;
     std::string car_name;
     std::string event;
+    std::string model;   ///< "melhorado" ou "original"
+    double fuel_kg = 0;  ///< combustível na largada [kg]
     fsae::CarSpec spec;
     std::vector<fsae::track::Segment> segments;  ///< já com o segmento de largada
     fsae::sim::SimulationResult result;
@@ -161,6 +163,8 @@ private:
     std::string track_file_;
     std::string track_error_;
     int event_ = 0;
+    int model_ = 0;        ///< índice em kModels (0 = melhorado)
+    double fuel_kg_ = 0;   ///< combustível na largada [kg]
     int laps_ = 2;
     bool laps_auto_ = true;
     int start_segment_ = 1;

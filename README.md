@@ -4,14 +4,20 @@ Simulador de tempo de volta para Formula SAE. Você monta o carro (massa, aerodi
 pneus, motor, câmbio, freio), escolhe a pista e vê em milissegundos o tempo de volta, a
 telemetria completa e a comparação entre setups.
 
-O modelo é de ponto de massa, com:
-- transferência de carga entre os pneus;
+O modelo é quase-estático, com:
+- transferência de carga entre os pneus e sensibilidade do atrito à carga;
+- elipse de atrito em cada eixo: o carro acelera e freia dentro das curvas, dividindo a
+  aderência com a força lateral;
 - aerodinâmica (downforce e arrasto);
 - curva de torque do motor com câmbio, tempo de troca e largada com two-step;
 - limite de aderência e de tombamento nas curvas;
-- frenagem até a velocidade da curva seguinte;
+- freio nos dois eixos, com distribuição ideal (segue a transferência de carga) ou balanço
+  fixo;
 - temperatura do disco de freio;
-- consumo de combustível por BSFC.
+- consumo de combustível por BSFC e endurance com a massa caindo a cada volta.
+
+Há dois modelos: o **melhorado** (padrão, [detalhes](docs/modelo_melhorado.md)) e o
+**original**, que reproduz exatamente a versão em MATLAB, de onde o projeto começou.
 
 ![Interface: telemetria comparando dois setups](docs/images/gui_telemetria.png)
 
@@ -62,7 +68,9 @@ Ele procura a pasta `Data` (carros e pistas) ao seu lado ou nas pastas acima. Se
 
 1. **Carro:** qual está em uso. Os botões levam para a aba Carros ou abrem a edição.
 2. **Pista e prova:** escolha uma pista de `Data/Tracks` ou abra qualquer CSV (os formatos
-   estão na seção [Pistas](#pistas)), a prova, o número de voltas e o segmento de largada.
+   estão na seção [Pistas](#pistas)), o modelo (melhorado ou original), a prova, o
+   número de voltas, o combustível na largada (no endurance a massa cai a cada volta) e o
+   segmento de largada.
 3. **Rodar:**
    - **Rodar simulação** (F5) guarda uma nova execução. Até 8 ficam guardadas, cada uma
      com sua cor, para comparar setups.
@@ -87,10 +95,10 @@ uma aba por grupo:
 |---|---|
 | Geral | nome, massa do carro e do piloto, gravidade |
 | Aerodinâmica | área frontal, densidade do ar, Cl·A, Cd·A, centro de pressão, mais Cl, Cd e L/D calculados e o gráfico de downforce e arrasto pela velocidade |
-| Chassi e pneus | entre-eixos, raio do pneu, distribuição de peso, CG, bitolas e atritos |
+| Chassi e pneus | entre-eixos, raio do pneu, distribuição de peso, CG, bitolas, atritos e sensibilidade do atrito à carga |
 | Transmissão | reduções, eficiência, tempo de troca, rpm de largada e de redução, tabela de marchas e o gráfico de rotação × velocidade em cada marcha |
 | Motor | tabelas de torque e de BSFC, editáveis ponto a ponto, com os gráficos de torque e potência |
-| Freio e ar | parâmetros do modelo térmico do disco |
+| Freio e ar | torque máximo de freio, distribuição (ideal ou balanço fixo na dianteira) e parâmetros do modelo térmico do disco |
 
 Valores inválidos aparecem em vermelho e bloqueiam a simulação. **Desfazer alterações**
 volta ao último estado salvo.
@@ -150,16 +158,17 @@ Resultados gravados em Results/autox
 
 ----------------------------------------
 Pista: autox (autocross, 2 voltas, 1049.05 m por volta)
-Volta 1 (partida):      47.492 s
-Volta 2 (lancada):      45.501 s
-Volta mais rapida:      45.501 s
-Tempo total:            92.992 s
+Modelo: melhorado
+Volta 1 (partida):      47.087 s
+Volta 2 (lancada):      45.019 s
+Volta mais rapida:      45.019 s
+Tempo total:            92.106 s
 Velocidade maxima:      125.19 km/h
-Acel. lateral max.:      1.498 g
-Temp. max. freio:        434.5 C
-Consumo total:          278.73 g
-  consumo volta 1:      145.23 g
-  consumo volta 2:      133.50 g
+Acel. lateral max.:      1.526 g
+Temp. max. freio:        434.1 C
+Consumo total:          254.95 g
+  consumo volta 1:      131.15 g
+  consumo volta 2:      123.80 g
 ----------------------------------------
 ```
 
@@ -170,6 +179,8 @@ fsae_sim run --track skidpad
 fsae_sim run --track acceleration --car meu_carro.json --out Results/accel_setupB
 fsae_sim run --track autox_2024_v1 --laps 5 --start-segment 10
 fsae_sim run --track minha_pista.csv --event custom --verbose
+fsae_sim run --track autox --model original           # modelo original (igual ao MATLAB)
+fsae_sim run --track autox --event endurance --fuel 4  # 25 voltas, 4 kg de combustível
 fsae_sim run --track autox --json --no-files        # resumo em JSON na saída padrão
 ```
 
@@ -190,8 +201,10 @@ Opções do `run`:
 |---|---|---|
 | `--track <arquivo\|nome>` | — | CSV da pista ou nome de uma pista de `Data/Tracks` |
 | `--car <arquivo.json>` | carro padrão (2024) | carro |
-| `--event <prova>` | deduzido do nome da pista | `autocross`, `skidpad`, `acceleration` ou `custom` |
-| `--laps <n>` | 2 em autocross/custom, 1 nas outras | número de voltas seguidas (a 1ª parte parada) |
+| `--model <modelo>` | `melhorado` | `melhorado` ou `original` (idêntico ao MATLAB) |
+| `--event <prova>` | deduzido do nome da pista | `autocross`, `skidpad`, `acceleration`, `endurance` ou `custom` |
+| `--laps <n>` | 2 em autocross/custom, 25 no endurance, 1 nas outras | número de voltas seguidas (a 1ª parte parada) |
+| `--fuel <kg>` | 0 | combustível no tanque na largada; no modelo melhorado a massa cai a cada volta |
 | `--start-segment <k>` | 1 | a volta começa no segmento `k` |
 | `--out <pasta>` | `Results/<pista>` | onde gravar os arquivos |
 | `--no-files` | — | só mostra o resumo |
@@ -366,6 +379,7 @@ const fsae::Car car = fsae::io::load_car("meu_carro.json");
 const auto track = fsae::track::load_track("Data/Tracks/autox.csv");
 fsae::sim::SimulationOptions opt;
 opt.laps = 2;
+opt.solver = fsae::sim::Solver::QuasiStatic;  // modelo melhorado (o padrão da biblioteca é o original)
 const auto r = fsae::sim::simulate(car, track.segments, opt);
 // r.lap_times, r.total_time, r.history.velocity, ...
 ```
@@ -403,23 +417,23 @@ depois de compilar; ela não vai para o Git e pode ser apagada a qualquer moment
 
 ## Limitações e próximos passos
 
-O modelo atual tem simplificações e alguns comportamentos a corrigir, listados em
-[problemas conhecidos](docs/problemas_conhecidos.md). Por exemplo: o carro não acelera
-dentro das curvas, curvas de raio muito grande (acima de ~136 m) ficam com velocidade zero
-e o rpm passa do limite nas reduções.
+O modelo melhorado é quase-estático: não há dinâmica de guinada nem de rolagem, e o BSFC
+é o de plena carga também em carga parcial ([detalhes](docs/modelo_melhorado.md)). O
+modelo original tem as simplificações e os comportamentos listados em
+[problemas conhecidos](docs/problemas_conhecidos.md), cada um com a correção e o efeito
+medido.
 
 Planejado:
 
-- correções dos problemas conhecidos, cada uma como opção e com o impacto medido;
-- melhorias de física (acelerar e frear dentro das curvas, transição entre curvas);
-- prova de endurance (autocross + 25 voltas; o número de voltas já é parâmetro);
-- integração com otimizadores (modeFRONTIER) usando `--json`.
+- integração com otimizadores (modeFRONTIER) usando `--json`;
+- troca de piloto no endurance.
 
 ## Histórico
 
 O simulador começou em MATLAB e foi reescrito em C++ para ficar mais rápido e mais fácil
-de usar. Os resultados das duas versões são idênticos. A versão original e o material
-usado na conversão estão guardados em [`MATLAB/`](MATLAB), só para consulta.
+de usar. O modelo original reproduz exatamente os resultados da versão em MATLAB. A versão
+original e o material usado na conversão estão guardados em [`MATLAB/`](MATLAB), só para
+consulta.
 
 ## Autores
 

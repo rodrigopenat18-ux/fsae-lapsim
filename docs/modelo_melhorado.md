@@ -74,3 +74,19 @@ dianteira em frenagem forte. Um balanço fixo nunca supera a distribuição idea
 - Quase-estático: não há dinâmica de guinada, de rolagem nem transitórios de pneu.
 - A transferência lateral se divide igualmente entre os eixos (como no original).
 - O BSFC é o de plena carga também em carga parcial.
+
+## Endurance
+
+Prova `endurance` (`--event endurance` ou "Endurance" na interface): 25 voltas seguidas,
+largada parada, temperatura do freio contínua entre as voltas. Com `--fuel <kg>`
+(combustível na largada), a massa de cada volta é a do carro mais o combustível que resta
+no meio dela, supondo o tanque no CG (a distribuição de peso não muda):
+
+1. uma primeira passada com o tanque cheio em todas as voltas dá o consumo de cada volta;
+2. a segunda passada usa a massa de cada volta calculada com esse consumo.
+
+Uma terceira passada muda o tempo total em menos de 1 ms (teste em
+`Tests/test_endurance.cpp`), então uma correção basta. No autox, com 4 kg de combustível,
+a massa cai de 298,9 para 296,0 kg, as voltas lançadas ficam ~2 ms mais rápidas a cada
+volta (45,091 → 45,037 s) e o consumo total é de 3,1 kg em 26 km. A troca de piloto não é
+simulada. No modelo original, o combustível entra como massa constante.
