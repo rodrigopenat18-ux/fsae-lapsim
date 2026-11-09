@@ -13,10 +13,36 @@ namespace fsae::physics {
     return (velocity / car.tire_radius) * total_gear_ratio * (60 / (2 * kPi));
 }
 
+/// Torque do motor [N·m] na rotação `rpm`. Com `car.model.limit_engine_map`, fora da faixa
+/// medida: 0 acima da rotação máxima (limitador) e o valor do primeiro ponto abaixo da mínima.
+[[nodiscard]] inline double engine_torque(const Car& car, double rpm) noexcept {
+    if (car.model.limit_engine_map) {
+        if (rpm > car.engine.rpm_max()) return 0.0;
+        if (rpm < car.engine.rpm_min()) rpm = car.engine.rpm_min();
+    }
+    return car.engine.torque(rpm);
+}
+
+/// Consumo específico [g/kWh]. Com `car.model.limit_engine_map`, constante fora da faixa medida.
+[[nodiscard]] inline double engine_bsfc(const Car& car, double rpm) noexcept {
+    if (car.model.limit_engine_map) {
+        const auto& x = car.engine.bsfc_rpm();
+        rpm = rpm < x.front() ? x.front() : (rpm > x.back() ? x.back() : rpm);
+    }
+    return car.engine.bsfc(rpm);
+}
+
+/// Velocidade máxima que a transmissão permite [m/s]: última marcha na rotação máxima do motor.
+[[nodiscard]] inline double max_vehicle_speed(const Car& car) noexcept {
+    constexpr double kPi = 3.141592653589793;
+    const double ratio = car.gear_ratios.back() * car.overall_reduction;
+    return car.engine.rpm_max() / ratio * (2 * kPi / 60) * car.tire_radius;
+}
+
 /// Torque na roda [N·m] (calculateEngineTorque): torque do motor × relações × eficiência.
 [[nodiscard]] inline double wheel_torque(const Car& car, double rpm, int gear) noexcept {
-    const double engine_torque = car.engine.torque(rpm);
-    return engine_torque * car.gear_ratios[gear - 1] * car.overall_reduction *
+    const double tq = physics::engine_torque(car, rpm);
+    return tq * car.gear_ratios[gear - 1] * car.overall_reduction *
            car.powertrain_efficiency;
 }
 
@@ -27,7 +53,7 @@ namespace fsae::physics {
 
 /// Torque do motor [N·m] na rotação de largada ("two-step") (calculateLaunchTorque).
 [[nodiscard]] inline double launch_torque(const Car& car) noexcept {
-    return car.engine.torque(car.launch_rpm);
+    return engine_torque(car, car.launch_rpm);
 }
 
 /// Força de frenagem [N] (calculateBrakeForce): 3000 N·m fixos no raio do pneu.

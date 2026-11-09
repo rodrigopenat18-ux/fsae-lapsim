@@ -13,10 +13,17 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
+
+      # A interface gráfica usa GLFW, que no Linux precisa dos cabeçalhos do X11 e do OpenGL.
+      - name: Install X11/OpenGL development packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'

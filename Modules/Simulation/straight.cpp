@@ -75,9 +75,9 @@ constexpr std::size_t kMaxSteps = 1000000;
 
 /// Combustível gasto em `dt` com o motor em `motor_rpm` a plena carga [g] (BSFC).
 double fuel_step(const Car& car, double motor_rpm, double dt) {
-    const double torque_motor = car.engine.torque(motor_rpm);
+    const double torque_motor = physics::engine_torque(car, motor_rpm);
     const double power_kw = (torque_motor * motor_rpm) / 9549;
-    const double bsfc = car.engine.bsfc(motor_rpm);
+    const double bsfc = physics::engine_bsfc(car, motor_rpm);
     return (bsfc * power_kw * dt) / 3600;
 }
 
@@ -88,6 +88,19 @@ double front_ratio(const Car& car, double acc, double slope, double velocity, do
     const auto& n = lt.normal_n;
     const double total = n[0] + n[1] + n[2] + n[3];
     return total > 0 ? (n[0] + n[1]) / total : fallback;
+}
+
+/// Tempo τ ∈ (0, dt] para ir de `p0` até `length` com velocidade `v0` e aceleração `a`
+/// constantes, a mesma cinemática do passo (p = p0 + v0·τ + a·τ²/2). Usado pela correção 3
+/// para terminar a reta exatamente no fim do segmento.
+double time_to_end(double p0, double v0, double a, double length, double dt) {
+    const double d = length - p0;
+    if (d <= 0) return 0;
+    const double disc = v0 * v0 + 2 * a * d;
+    if (disc <= 0) return dt;
+    const double den = v0 + std::sqrt(disc);
+    if (den <= 0) return dt;
+    return std::min(dt, 2 * d / den);  // forma estável de (-v0 + √disc) / a
 }
 
 /// MODO 1: aceleração máxima até o fim da reta.
@@ -109,14 +122,17 @@ StraightResult full_throttle(const Car& car, double length, double v0, double sl
         const auto step = physics::car_accelerate(car, f.engine_force, f.drag,
                                                   f.rolling_resistance, f.slope_force, vel, pos,
                                                   dt, slope);
-        fuel = fuel + fuel_step(car, motor_rpm, dt);
+        // Correção 3: o passo que cruza o fim da reta é encurtado até o fim exato.
+        const bool cut = car.model.exact_segment_end && step.position >= length;
+        const double dt_eff = cut ? time_to_end(pos, vel, step.acceleration, length, dt) : dt;
+        fuel = fuel + fuel_step(car, motor_rpm, dt_eff);
         const double ratio = front_ratio(car, step.acceleration, slope, vel, static_front_ratio);
-        const auto bt = physics::brake_temperature(car, vel, 0, temp, dt, ratio);
+        const auto bt = physics::brake_temperature(car, vel, 0, temp, dt_eff, ratio);
         temp = bt.new_temp;
 
-        pos = step.position;
-        vel = step.velocity;
-        time = time + dt;
+        pos = cut ? length : step.position;
+        vel = cut ? vel + step.acceleration * dt_eff : step.velocity;
+        time = time + dt_eff;
         motor_rpm = control::motor_rpm(car, vel, gear);
 
         push(h, {time, pos, vel, step.acceleration, gear, motor_rpm, f.drag, f.downforce,
@@ -162,28 +178,34 @@ Attempt run_braking(const Car& car, double length, double v0, double slope, doub
             curr_eng = f.engine_force;
             step = physics::car_accelerate(car, f.engine_force, f.drag, f.rolling_resistance,
                                            f.slope_force, vel, pos, dt, slope);
-            if (h) {
-                fuel_inc = fuel_step(car, motor_rpm, dt);
-                ratio = front_ratio(car, step.acceleration, slope, vel, static_front_ratio);
-            }
         } else {
             const auto bs = physics::car_brake(car, brake_force, f.drag, f.rolling_resistance,
                                                f.slope_force, vel, pos, dt, slope);
             step = bs;
             curr_brk = bs.actual_brake_force;
-            if (h) ratio = front_ratio(car, step.acceleration, slope, vel, 0.5);
+        }
+        // Correção 3: o passo que cruza o fim da reta é encurtado até o fim exato.
+        const bool cut = car.model.exact_segment_end && step.position >= length;
+        const double dt_eff = cut ? time_to_end(pos, vel, step.acceleration, length, dt) : dt;
+        if (h) {
+            if (accelerating) {
+                fuel_inc = fuel_step(car, motor_rpm, dt_eff);
+                ratio = front_ratio(car, step.acceleration, slope, vel, static_front_ratio);
+            } else {
+                ratio = front_ratio(car, step.acceleration, slope, vel, 0.5);
+            }
         }
 
         physics::BrakeTempResult bt;
         if (h) {
             fuel = fuel + fuel_inc;
-            bt = physics::brake_temperature(car, vel, curr_brk, temp, dt, ratio);
+            bt = physics::brake_temperature(car, vel, curr_brk, temp, dt_eff, ratio);
             temp = bt.new_temp;
         }
 
-        pos = step.position;
-        vel = step.velocity;
-        time = time + dt;
+        pos = cut ? length : step.position;
+        vel = cut ? std::max(0.0, vel + step.acceleration * dt_eff) : step.velocity;
+        time = time + dt_eff;
 
         if (h) {
             motor_rpm = control::motor_rpm(car, vel, gear);
@@ -200,6 +222,7 @@ Attempt run_braking(const Car& car, double length, double v0, double slope, doub
 /// Estado dinâmico completo entre passos (o que determina o passo seguinte).
 struct DynState {
     double pos = 0, vel = 0, time = 0;
+    double acc = 0;  ///< aceleração do passo que levou a este estado
     int gear = 1;
     control::ShiftState shift;
 };
@@ -245,6 +268,7 @@ private:
         s.pos = st.position;
         s.vel = st.velocity;
         s.time = s.time + dt;
+        s.acc = st.acceleration;
         states_.push_back(s);
     }
 
@@ -269,6 +293,10 @@ Attempt finish_braking(const Car& car, double length, double slope, double braki
         } else {
             st = physics::car_brake(car, brake_force, f.drag, f.rolling_resistance, f.slope_force,
                                     s.vel, s.pos, dt, slope);
+        }
+        if (car.model.exact_segment_end && st.position >= length) {
+            const double tau = time_to_end(s.pos, s.vel, st.acceleration, length, dt);
+            return {s.time + tau, std::max(0.0, s.vel + st.acceleration * tau), false};
         }
         s.pos = st.position;
         s.vel = st.velocity;
@@ -299,9 +327,17 @@ StraightResult with_target(const Car& car, double length, double v0, double targ
         // Trecho acelerando (compartilhado) + frenagem a partir do ponto de frenagem.
         const std::size_t k = prefix.first_at_or_after(braking_point);
         const DynState& s = prefix.state(k);
-        const Attempt a = (k > 0 && s.pos >= length)
-                              ? Attempt{s.time, s.vel, false}
-                              : finish_braking(car, length, slope, braking_point, s);
+        Attempt a;
+        if (k > 0 && s.pos >= length) {
+            a = Attempt{s.time, s.vel, false};
+            if (car.model.exact_segment_end) {  // correção 3: fim exato a partir do estado anterior
+                const DynState& p = prefix.state(k - 1);
+                const double tau = time_to_end(p.pos, p.vel, s.acc, length, kStraightDt);
+                a = Attempt{p.time + tau, p.vel + s.acc * tau, false};
+            }
+        } else {
+            a = finish_braking(car, length, slope, braking_point, s);
+        }
         last_time = a.time;
         last_bp = braking_point;
         const double diff_vel = a.final_vel - target;

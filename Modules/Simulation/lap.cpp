@@ -144,7 +144,7 @@ void run_corner(const Car& car, const track::Segment& seg, double max_v, double 
         const double ratio_val = front_dist_val / 100;
 
         const double pot_kw = std::max(0.0, (f_engine * actual_v) / 1000);
-        const double bsfc = car.engine.bsfc(rpm);
+        const double bsfc = physics::engine_bsfc(car, rpm);
         const double fuel_step = (bsfc * pot_kw * dt_curve) / 3600;
 
         for (std::size_t j = 1; j <= nP; ++j) {
@@ -180,7 +180,7 @@ void run_corner(const Car& car, const track::Segment& seg, double max_v, double 
 }
 
 /// Pós-processamento: máximos e separação das voltas.
-void summarize(SimulationResult& r, double lap_length) {
+void summarize(SimulationResult& r, double lap_length, bool interpolate_crossing) {
     const auto& h = r.history;
     r.max_velocity_kmh = *std::max_element(h.velocity.begin(), h.velocity.end()) * 3.6;
     double max_lat = 0;
@@ -222,10 +222,18 @@ void summarize(SimulationResult& r, double lap_length) {
             closed = false;
             break;
         }
-        r.lap_times[k - 1] = h.time[idx] - prev_time;
-        r.lap_fuel_g[k - 1] = h.fuel_consumed_g[idx] - prev_fuel;
-        prev_time = h.time[idx];
-        prev_fuel = h.fuel_consumed_g[idx];
+        double t_cross = h.time[idx];
+        double fuel_cross = h.fuel_consumed_g[idx];
+        if (interpolate_crossing && idx > 0 && h.distance[idx] > h.distance[idx - 1]) {
+            // Correção 3: instante exato em que a distância cruza k × volta.
+            const double w = (threshold - h.distance[idx - 1]) / (h.distance[idx] - h.distance[idx - 1]);
+            t_cross = h.time[idx - 1] + w * (h.time[idx] - h.time[idx - 1]);
+            fuel_cross = h.fuel_consumed_g[idx - 1] + w * (h.fuel_consumed_g[idx] - h.fuel_consumed_g[idx - 1]);
+        }
+        r.lap_times[k - 1] = t_cross - prev_time;
+        r.lap_fuel_g[k - 1] = fuel_cross - prev_fuel;
+        prev_time = t_cross;
+        prev_fuel = fuel_cross;
         r.lap_start_index[k] = idx;
         search_from = idx;
     }
@@ -243,11 +251,13 @@ void summarize(SimulationResult& r, double lap_length) {
 
 }  // namespace
 
-SimulationResult simulate(const Car& car, const std::vector<track::Segment>& lap_segments,
+SimulationResult simulate(const Car& car_in, const std::vector<track::Segment>& lap_segments,
                           const SimulationOptions& options) {
     if (lap_segments.empty()) throw std::invalid_argument("pista sem segmentos");
     if (options.laps < 1) throw std::invalid_argument("numero de voltas deve ser >= 1");
     std::ostream* log = options.log;
+    Car car = car_in;  // as correções escolhidas valem para todos os cálculos desta simulação
+    car.model = options.model;
 
     SimulationResult r;
     r.laps = options.laps;
@@ -381,7 +391,7 @@ SimulationResult simulate(const Car& car, const std::vector<track::Segment>& lap
     }
 
     r.total_time = st.total_time;
-    summarize(r, lap_length);
+    summarize(r, lap_length, car.model.exact_segment_end);
     return r;
 }
 

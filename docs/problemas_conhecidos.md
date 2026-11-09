@@ -1,24 +1,29 @@
-# Problemas conhecidos (herdados do MATLAB)
+# Problemas conhecidos do modelo
 
-O port C++ reproduz **fielmente** o simulador MATLAB, inclusive os comportamentos abaixo,
-para que os resultados possam ser validados contra a referência. Cada item será corrigido
-depois, um de cada vez, como opção (desligada por padrão) e com o impacto medido no tempo de volta.
+O modelo **original** (o padrão, idêntico à versão em MATLAB) tem os comportamentos abaixo.
+As correções existem como opções (`fsae::ModelOptions`, em
+[`Modules/Vehicle/model_options.hpp`](../Modules/Vehicle/model_options.hpp)), que podem ser
+ligadas uma a uma ou todas juntas (`ModelOptions::corrected()`), com testes em
+[`Tests/test_model_fixes.cpp`](../Tests/test_model_fixes.cpp).
 
-| # | Onde (MATLAB) | Problema | Efeito |
-|---|---|---|---|
-| 1 | `initializeTrack.m` | `theta = atan(slope/100)` trata o slope como %, mas o resto do código usa radianos | Velocidade de curva calculada como se a pista fosse plana |
-| 2 | `calculateMaxSafeCurveSpeed.m` | Denominador `m − μ·K_aero·R` vai a zero perto de R ≈ 136,5 m e fica negativo depois; `max(0, …)` zera `v_grip` | Perto do limite a velocidade explode (R = 136,5 m → 2.176 m/s); acima dele a curva fica com velocidade 0. Afeta pistas em CSV com raios grandes: em `Pista_AutoX.csv`, 70 dos 544 segmentos têm R > 136,5 m — 69 ficam com velocidade 0 (o carro passa a 0,1 m/s e a volta leva ~8.400 s) e um (R = 136,527 m) fica com 3.367 m/s. O `fsae_sim run` avisa quando isso acontece |
-| 3 | `calculate_Straight.m` + `runSimulation.m` | Cada reta termina em `pos ≥ L` (ultrapassa até v·dt); o corte da volta 1 usa `distance >= comprimento_pista` | Distância acumulada adiantada; volta 1 cortada cedo e `Lap2_Time` inflado. Como a reta final se funde com a reta de largada da volta seguinte, a divisão cai no meio de uma reta: com 4 voltas no autocross, as voltas lançadas saem 45,43 / 45,42 / 45,57 s em vez de iguais. A última volta não tem reta seguinte para fundir e sai ~1 s mais lenta (25 voltas: 45,41 s nas intermediárias, 46,44 s na última) — precisa ser resolvido antes do endurance |
-| 4 | `checkDownshift.m` | Reduz marcha sempre que rpm < `downshiftRPM` (11500) sem checar o rpm resultante | RPM gravado passa do limite (até ~14.000 rpm) na frenagem |
-| 5 | `calculateDynamicTransfer.m` / `runSimulation.m` | Convenção de sinal da aceleração lateral contradiz os comentários | Sem efeito numérico (checagem simétrica); só o sinal da telemetria |
-| 6 | `dataEngine.m` | `griddedInterpolant` pchip extrapola a curva de torque fora de 4.499–12.454 rpm sem limite | Valores absurdos (689 Nm a 3.000 rpm; 8.561 Nm a 14.000 rpm). Hoje só ocorre nas reduções de marcha da frenagem (item 4), cujo torque é descartado; vira problema se a física mudar |
+| # | Onde | Problema | Efeito no original | Correção (opção) |
+|---|---|---|---|---|
+| 1 | velocidade de curva (`initializeTrack`) | `theta = atan(slope/100)` trata a inclinação como %, mas o resto do código usa radianos | Velocidade de curva calculada como se a pista fosse plana | `slope_in_radians`: usa radianos. Efeito: +0,005 s (autox 2024 V1) e +0,036 s (V1 inversa) na volta 1, já que a componente do peso que aperta o pneu cai com cos θ |
+| 2 | `calculateMaxSafeCurveSpeed` | Quando `m − μ·K_aero·R ≤ 0` (R ≥ 136,5 m no carro de 2024), o `max(0, …)` zera `v_grip` | Curvas de raio grande ficam com velocidade 0. Em `Pista_AutoX.csv`, 69 curvas; o carro passa a 0,1 m/s e a volta leva ~8.400 s | `unbounded_corner_grip`: o downforce cresce mais rápido que a força centrípeta necessária, então a curva **não tem limite de aderência**. Na `Pista_AutoX.csv`, a volta lançada cai de 8.392 s para 90 s; o que ainda a deixa lenta é o item "não acelera em curva", abaixo |
+| 3 | reta (`calculate_Straight`) e divisão das voltas | Cada reta termina em `pos ≥ L` (passa do fim em até v·dt), e o corte da volta usa a primeira amostra com `distance ≥ k·L` | A distância acumula ~1 m a mais por volta (+27 m em 25 voltas), e as voltas são cortadas cedo. A última de um endurance sai ~1 s mais lenta. No skidpad, o carro "freava" um passo inteiro para cobrir os últimos 0,8 mm e entrava na curva a 9,83 m/s em vez de 10,05 m/s | `exact_segment_end`: o último passo é encurtado até o fim exato do segmento e o tempo da volta é interpolado no cruzamento da linha. A distância passa a ser exata; skidpad −0,125 s; diferença entre as voltas lançadas em 25 voltas cai de 1,03 s para 0,29 s. O que sobra vem da busca do ponto de frenagem, que só começa a frear no início de um passo de 0,01 s e aceita terminar até 0,1 m/s abaixo do alvo |
+| 4 | `checkDownshift` | Reduz marcha sempre que rpm < `downshiftRPM` (11500), sem checar o rpm resultante | Rotação chega a ~14.000 rpm na frenagem, acima do limite do motor (12.454 rpm) | `downshift_rev_check`: só reduz se a marcha de baixo não passar do rpm de troca dela. A rotação máxima fica em ~12.030 rpm; o tempo de volta não muda, porque na frenagem a força do motor não é usada |
+| 5 | `calculateDynamicTransfer` / `runSimulation` | Convenção de sinal da aceleração lateral contradiz os comentários | Sem efeito numérico (checagem simétrica); só o sinal da telemetria | — |
+| 6 | `dataEngine` | A interpolação pchip extrapola a curva de torque fora de 4.499–12.454 rpm sem limite | Valores absurdos (689 N·m a 3.000 rpm; 8.561 N·m a 14.000 rpm). Nas pistas, isso só aparece nas reduções da frenagem, cujo torque é descartado | `limit_engine_map`: torque 0 acima da rotação máxima (corte do limitador), torque do primeiro ponto abaixo da mínima, BSFC constante fora da faixa. Sem efeito nas pistas atuais; protege o modelo quando a física mudar |
 
-## Simplificações de modelo (melhorias futuras, não são bugs)
+## Simplificações de modelo (melhorias planejadas)
 
 - O carro nunca acelera dentro de curva; em sequência de curvas a velocidade só diminui.
 - Redução de velocidade entre curvas consecutivas é instantânea (sem frenagem).
+- A frenagem e a aceleração não dividem a aderência com a curva (sem elipse de atrito).
 - Tração cai de μ estático para μ cinético quando a força do motor passa da aderência estática.
-- Não há modo endurance (planejado: autocross + 25 voltas). O C++ já aceita qualquer número de voltas (`--laps`).
+- O pneu tem atrito constante (sem sensibilidade à carga).
+- Não há modo endurance completo (planejado: autocross + 25 voltas, com a massa caindo pelo
+  combustível consumido). O número de voltas já é parâmetro (`--laps`).
 
 ## Observações sobre os dados das pistas
 
@@ -26,9 +31,9 @@ depois, um de cada vez, como opção (desligada por padrão) e com o impacto med
   original, os slopes dos segmentos 1–31 batem com a matriz até a 6ª casa decimal.
   Os segmentos 32–35 (o antigo segmento 32 dividido em quatro) e o 52 foram editados à
   mão e não batem: o segmento 32 tem `+0.089364`, e o GPX dá exatamente `−0.089364`
-  (provável sinal trocado). Os dados foram mantidos como estão no MATLAB.
+  (provável sinal trocado). Os dados foram mantidos como estão.
 
-## Corrigido no port (não afeta a física)
+## Corrigido na conversão (não afeta a física)
 
 - `loadRealLog.m`: o tipo 1 procurava `log_autocross.csv`, que não existe (arquivo real:
   `log_autox.csv`). Agora o arquivo é passado explicitamente (`MATLAB/Tools/loadRealLogFile.m`,

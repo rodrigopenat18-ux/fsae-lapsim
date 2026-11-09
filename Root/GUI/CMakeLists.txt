@@ -6,6 +6,8 @@ include(FetchContent)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+# No Linux, só X11 (Wayland exigiria mais pacotes de desenvolvimento).
+set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(glfw
@@ -61,6 +63,10 @@ if(NOT MSVC)
 endif()
 if(WIN32)
     target_link_libraries(fsae_gui PRIVATE comdlg32 shell32)
+endif()
+if(MSVC)
+    # Programa de janela (WIN32) com main(): o MSVC procuraria WinMain sem isto.
+    target_link_options(fsae_gui PRIVATE /ENTRY:mainCRTStartup)
 endif()
 
 if(FSAE_COPY_TO_ROOT)

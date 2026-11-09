@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Vehicle/engine.hpp"
+#include "Vehicle/model_options.hpp"
 
 namespace fsae {
 
@@ -114,6 +115,11 @@ struct Car {
 
     // --- Motor ---
     EngineMap engine;  ///< (TorqueInterpol, bsfc_map, rpm_min, rpm_max)
+
+    // --- Modelo ---
+    /// Correções do modelo usadas nos cálculos (não fazem parte do JSON do carro; a
+    /// simulação copia aqui as opções escolhidas). Padrão: modelo original.
+    ModelOptions model;
 
     // --- Freio ---
     double brake_mass = 0;          ///< massa de um disco [kg] (brake_mass)

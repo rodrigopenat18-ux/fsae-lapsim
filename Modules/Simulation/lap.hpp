@@ -26,6 +26,8 @@ struct SimulationOptions {
     double initial_velocity = 0;      ///< [m/s] (MATLAB: fixo em 0)
     double initial_brake_temp = 25;   ///< [°C] (MATLAB: fixo em 25)
     std::ostream* log = nullptr;      ///< se não nulo, imprime o relatório trecho a trecho
+    /// Correções do modelo (padrão: modelo original). Ver Vehicle/model_options.hpp.
+    ModelOptions model;
 };
 
 /// Telemetria da simulação inteira, um elemento por amostra.

@@ -34,7 +34,13 @@ int check_upshift(const Car& car, double velocity, int gear, bool is_shifting) n
 int check_downshift(const Car& car, double velocity, int gear, bool is_shifting) noexcept {
     if (gear <= 1 || is_shifting) return gear;
     const double rpm = physics::engine_rpm(car, velocity, gear);
-    return rpm < car.downshift_rpm ? gear - 1 : gear;
+    if (!(rpm < car.downshift_rpm)) return gear;
+    if (car.model.downshift_rev_check) {
+        // Não reduz se o motor passaria do rpm de troca da marcha de baixo (sobregiro).
+        const double rpm_lower = physics::engine_rpm(car, velocity, gear - 1);
+        if (rpm_lower > car.shift_rpm[static_cast<std::size_t>(gear - 2)]) return gear;
+    }
+    return gear - 1;
 }
 
 int manage_gear(const Car& car, double velocity, int gear, bool is_accelerating, ShiftState& state,
