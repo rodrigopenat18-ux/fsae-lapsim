@@ -23,7 +23,8 @@
   "tyre": {
     "mu_x_static": 2.1,
     "mu_x_kinetic": 1.3,
-    "mu_y": 1.2
+    "mu_y": 1.2,
+    "load_sensitivity": 0.0
   },
   "powertrain": {
     "primary_reduction": 2.111,
@@ -249,7 +250,9 @@
     "disc_emissivity": 0.55,
     "bobbin_count": 5.0,
     "bobbin_diameter_m": 0.009,
-    "conduction_distance_m": 0.0282
+    "conduction_distance_m": 0.0282,
+    "max_torque_nm": 3000.0,
+    "bias_front_percent": null
   },
   "air": {
     "thermal_conductivity_w_mk": 0.026,

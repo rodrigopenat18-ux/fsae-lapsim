@@ -62,6 +62,15 @@ Car Car::from_spec(const CarSpec& s) {
     require_positive(s.final_drive, "final_drive");
     require_positive(s.brake_disc_mass_kg, "brake_disc_mass_kg");
     require_positive(s.brake_disc_diameter_m, "brake_disc_diameter_m");
+    require(std::isfinite(s.tyre_load_sensitivity) && s.tyre_load_sensitivity >= 0.0 &&
+                s.tyre_load_sensitivity < 1.0,
+            "tyre_load_sensitivity deve estar entre 0 e 1");
+    require_positive(s.brake_max_torque_nm, "brake_max_torque_nm");
+    if (s.brake_bias_front_percent) {
+        require(std::isfinite(*s.brake_bias_front_percent) && *s.brake_bias_front_percent > 0.0 &&
+                    *s.brake_bias_front_percent < 100.0,
+                "brake_bias_front_percent deve estar entre 0 e 100");
+    }
     require(!s.gear_ratios.empty(), "gear_ratios vazio");
     for (double r : s.gear_ratios) require_positive(r, "gear_ratios[i]");
     require(s.upshift_rpm.size() == s.gear_ratios.size(),
@@ -97,6 +106,7 @@ Car Car::from_spec(const CarSpec& s) {
     c.mux_static = s.mu_x_static;
     c.mux_kinetic = s.mu_x_kinetic;
     c.muy = s.mu_y;
+    c.tyre_load_sensitivity = s.tyre_load_sensitivity;
 
     c.overall_reduction = s.primary_reduction * s.final_drive;
     c.gear_ratios = s.gear_ratios;
@@ -117,6 +127,8 @@ Car Car::from_spec(const CarSpec& s) {
     const double r_bobbin = s.brake_bobbin_diameter_m / 2.0;
     c.brake_cond_area = s.brake_bobbin_count * (kPi * (r_bobbin * r_bobbin));
     c.brake_cond_dist = s.brake_conduction_distance_m;
+    c.brake_max_torque = s.brake_max_torque_nm;
+    if (s.brake_bias_front_percent) c.brake_bias_front = *s.brake_bias_front_percent / 100.0;
 
     c.air_k = s.air_thermal_conductivity_w_mk;
     c.air_mu = s.air_dynamic_viscosity_pa_s;

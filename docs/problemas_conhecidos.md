@@ -15,14 +15,16 @@ ligadas uma a uma ou todas juntas (`ModelOptions::corrected()`), com testes em
 | 5 | `calculateDynamicTransfer` / `runSimulation` | Convenção de sinal da aceleração lateral contradiz os comentários | Sem efeito numérico (checagem simétrica); só o sinal da telemetria | — |
 | 6 | `dataEngine` | A interpolação pchip extrapola a curva de torque fora de 4.499–12.454 rpm sem limite | Valores absurdos (689 N·m a 3.000 rpm; 8.561 N·m a 14.000 rpm). Nas pistas, isso só aparece nas reduções da frenagem, cujo torque é descartado | `limit_engine_map`: torque 0 acima da rotação máxima (corte do limitador), torque do primeiro ponto abaixo da mínima, BSFC constante fora da faixa. Sem efeito nas pistas atuais; protege o modelo quando a física mudar |
 
-## Simplificações de modelo (melhorias planejadas)
+## Simplificações do modelo original
+
+Estas são tratadas pelo [modelo melhorado](modelo_melhorado.md) (`Solver::QuasiStatic`):
 
 - O carro nunca acelera dentro de curva; em sequência de curvas a velocidade só diminui.
 - Redução de velocidade entre curvas consecutivas é instantânea (sem frenagem).
 - A frenagem e a aceleração não dividem a aderência com a curva (sem elipse de atrito).
 - Tração cai de μ estático para μ cinético quando a força do motor passa da aderência estática.
 - O pneu tem atrito constante (sem sensibilidade à carga).
-- Não há modo endurance completo (planejado: autocross + 25 voltas, com a massa caindo pelo
+- Não há modo endurance completo (planejado: 25 voltas, com a massa caindo pelo
   combustível consumido). O número de voltas já é parâmetro (`--laps`).
 
 ## Observações sobre os dados das pistas

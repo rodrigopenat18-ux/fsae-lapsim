@@ -14,6 +14,7 @@
 #include "Physics/load_transfer.hpp"
 #include "Physics/powertrain.hpp"
 #include "Physics/resistances.hpp"
+#include "Simulation/quasi_static.hpp"
 #include "Simulation/straight.hpp"
 
 namespace fsae::sim {
@@ -39,6 +40,19 @@ Event parse_event(const std::string& name) {
     if (name == "custom") return Event::Custom;
     throw std::invalid_argument("prova desconhecida: \"" + name +
                                 "\" (use autocross, skidpad, acceleration ou custom)");
+}
+
+const char* to_string(Solver solver) noexcept {
+    return solver == Solver::QuasiStatic ? "melhorado" : "original";
+}
+
+Solver parse_solver(const std::string& name) {
+    if (name == "original") return Solver::Original;
+    if (name == "melhorado" || name == "improved" || name == "quasi-static") {
+        return Solver::QuasiStatic;
+    }
+    throw std::invalid_argument("modelo desconhecido: \"" + name +
+                                "\" (use original ou melhorado)");
 }
 
 void Telemetry::reserve(std::size_t n) {
@@ -255,6 +269,9 @@ SimulationResult simulate(const Car& car_in, const std::vector<track::Segment>& 
                           const SimulationOptions& options) {
     if (lap_segments.empty()) throw std::invalid_argument("pista sem segmentos");
     if (options.laps < 1) throw std::invalid_argument("numero de voltas deve ser >= 1");
+    if (options.solver == Solver::QuasiStatic) {
+        return simulate_quasi_static(car_in, lap_segments, options);
+    }
     std::ostream* log = options.log;
     Car car = car_in;  // as correções escolhidas valem para todos os cálculos desta simulação
     car.model = options.model;

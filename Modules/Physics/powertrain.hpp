@@ -57,7 +57,9 @@ namespace fsae::physics {
 }
 
 /// Força de frenagem [N] (calculateBrakeForce): 3000 N·m fixos no raio do pneu.
-[[nodiscard]] inline double brake_force(const Car& car) noexcept { return 3000 / car.tire_radius; }
+[[nodiscard]] inline double brake_force(const Car& car) noexcept {
+    return car.brake_max_torque / car.tire_radius;
+}
 
 /// Aderência longitudinal máxima [N] nas rodas motrizes (calculateMaxGrip):
 /// atrito estático, ou cinético se a força do motor passar do limite estático.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,6 +39,10 @@ struct CarSpec {
     double mu_x_static = 2.1;
     double mu_x_kinetic = 1.3;
     double mu_y = 1.2;
+    /// Sensibilidade do atrito à carga: μ = μ₀·(1 − k·(Fz/Fz_estática − 1)) por pneu.
+    /// 0 = atrito constante (padrão). Valores típicos de pneus de FSAE: 0,1 a 0,2.
+    /// Usado só pelo modelo melhorado.
+    double tyre_load_sensitivity = 0.0;
 
     // --- Transmissão ---
     double primary_reduction = 2.111;
@@ -64,6 +69,11 @@ struct CarSpec {
     double brake_bobbin_count = 5.0;
     double brake_bobbin_diameter_m = 0.009;
     double brake_conduction_distance_m = 0.0282;
+    /// Torque máximo de freio no conjunto das rodas [N·m] (o modelo original usa 3000 fixo).
+    double brake_max_torque_nm = 3000.0;
+    /// Fração da força de freio na dianteira [%]. Vazio = distribuição ideal, que segue a
+    /// transferência de carga longitudinal (cada eixo freia no seu limite). Modelo melhorado.
+    std::optional<double> brake_bias_front_percent;
 
     // --- Ar ---
     double air_thermal_conductivity_w_mk = 0.026;
@@ -103,6 +113,7 @@ struct Car {
     double mux_static = 0;   ///< atrito longitudinal estático (mux_static)
     double mux_kinetic = 0;  ///< atrito longitudinal cinético (mux_kinetic)
     double muy = 0;          ///< atrito lateral (muy)
+    double tyre_load_sensitivity = 0;  ///< k da sensibilidade à carga (0 = atrito constante)
 
     // --- Transmissão ---
     double overall_reduction = 0;      ///< primária × final (overall_reduction)
@@ -129,6 +140,8 @@ struct Car {
     double brake_emissivity = 0;    ///< (brake_emissivity)
     double brake_cond_area = 0;     ///< área de condução disco→cubo [m²] (brake_cond_area)
     double brake_cond_dist = 0;     ///< [m] (brake_cond_dist)
+    double brake_max_torque = 3000;  ///< torque máximo de freio [N·m]
+    std::optional<double> brake_bias_front;  ///< fração na dianteira (0..1); vazio = ideal
 
     // --- Ar ---
     double air_k = 0;   ///< condutividade térmica do ar [W/m·K] (air_k)

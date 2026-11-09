@@ -21,13 +21,32 @@ enum class Event { Autocross, Skidpad, Acceleration, Custom };
 /// "autocross", "skidpad", "acceleration" ou "custom" (lança std::invalid_argument).
 [[nodiscard]] Event parse_event(const std::string& name);
 
+/// Modelo de simulação.
+enum class Solver {
+    /// Modelo original (idêntico ao MATLAB): curvas a velocidade constante, retas no tempo.
+    Original,
+    /// Modelo melhorado: quase-estático em distância, com elipse de atrito
+    /// (Simulation/quasi_static.hpp).
+    QuasiStatic,
+};
+
+[[nodiscard]] const char* to_string(Solver solver) noexcept;
+/// "original" ou "melhorado"/"improved"/"quasi-static" (lança std::invalid_argument).
+[[nodiscard]] Solver parse_solver(const std::string& name);
+
 struct SimulationOptions {
     int laps = 1;                     ///< voltas seguidas (a 1ª parte parada)
     double initial_velocity = 0;      ///< [m/s] (MATLAB: fixo em 0)
     double initial_brake_temp = 25;   ///< [°C] (MATLAB: fixo em 25)
     std::ostream* log = nullptr;      ///< se não nulo, imprime o relatório trecho a trecho
-    /// Correções do modelo (padrão: modelo original). Ver Vehicle/model_options.hpp.
+    /// Modelo usado. A biblioteca usa o original por padrão; a interface e a linha de
+    /// comando usam o melhorado.
+    Solver solver = Solver::Original;
+    /// Correções pontuais do modelo original (padrão: nenhuma). Ver Vehicle/model_options.hpp.
+    /// O modelo melhorado ignora este campo e usa sempre todas as correções.
     ModelOptions model;
+    /// Passo de distância do modelo melhorado [m].
+    double step_m = 0.25;
 };
 
 /// Telemetria da simulação inteira, um elemento por amostra.

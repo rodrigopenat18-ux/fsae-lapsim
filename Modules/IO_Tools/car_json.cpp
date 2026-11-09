@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <initializer_list>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -30,6 +31,18 @@ public:
         return v.get<double>();
     }
 
+    /// Campo opcional: o valor, ou `fallback` se ausente.
+    double number_or(const std::string& key, double fallback) {
+        return obj_.find(key) == obj_.end() ? fallback : number(key);
+    }
+
+    /// Campo opcional que aceita `null`: vazio se ausente ou nulo.
+    std::optional<double> optional_number(const std::string& key) {
+        const auto it = obj_.find(key);
+        if (it == obj_.end() || it->is_null()) return std::nullopt;
+        return number(key);
+    }
+
     std::string text(const std::string& key) {
         const auto& v = field(key);
         if (!v.is_string()) fail(where_ + "." + key, "esperado um texto");
@@ -49,14 +62,18 @@ public:
         return out;
     }
 
-    /// Declara os campos do grupo. Primeiro acusa campos desconhecidos (provável erro
-    /// de digitação, com a lista dos válidos), depois campos obrigatórios ausentes.
-    void expect(std::initializer_list<const char*> keys) const {
+    /// Declara os campos do grupo: `keys` obrigatórios e `optional` opcionais. Primeiro acusa
+    /// campos desconhecidos (provável erro de digitação, com a lista dos válidos), depois
+    /// campos obrigatórios ausentes.
+    void expect(std::initializer_list<const char*> keys,
+                std::initializer_list<const char*> optional = {}) const {
         std::set<std::string> valid(keys.begin(), keys.end());
+        valid.insert(optional.begin(), optional.end());
         for (const auto& item : obj_.items()) {
             if (valid.count(item.key()) == 0) {
                 std::string list;
                 for (const auto& k : keys) list += (list.empty() ? "" : ", ") + std::string(k);
+                for (const auto& k : optional) list += ", " + std::string(k);
                 fail(where_ + "." + item.key(), "campo desconhecido (validos: " + list + ")");
             }
         }
@@ -116,10 +133,11 @@ CarSpec from_json(const ordered_json& j, const std::string& source) {
     }
     {
         auto r = root.child("tyre");
-        r.expect({"mu_x_static", "mu_x_kinetic", "mu_y"});
+        r.expect({"mu_x_static", "mu_x_kinetic", "mu_y"}, {"load_sensitivity"});
         s.mu_x_static = r.number("mu_x_static");
         s.mu_x_kinetic = r.number("mu_x_kinetic");
         s.mu_y = r.number("mu_y");
+        s.tyre_load_sensitivity = r.number_or("load_sensitivity", 0.0);
     }
     {
         auto r = root.child("powertrain");
@@ -146,7 +164,8 @@ CarSpec from_json(const ordered_json& j, const std::string& source) {
         auto r = root.child("brakes");
         r.expect({"disc_mass_kg", "disc_diameter_m", "disc_surface_area_m2",
                   "disc_thermal_conductivity_w_mk", "disc_emissivity", "bobbin_count",
-                  "bobbin_diameter_m", "conduction_distance_m"});
+                  "bobbin_diameter_m", "conduction_distance_m"},
+                 {"max_torque_nm", "bias_front_percent"});
         s.brake_disc_mass_kg = r.number("disc_mass_kg");
         s.brake_disc_diameter_m = r.number("disc_diameter_m");
         s.brake_disc_surface_area_m2 = r.number("disc_surface_area_m2");
@@ -155,6 +174,8 @@ CarSpec from_json(const ordered_json& j, const std::string& source) {
         s.brake_bobbin_count = r.number("bobbin_count");
         s.brake_bobbin_diameter_m = r.number("bobbin_diameter_m");
         s.brake_conduction_distance_m = r.number("conduction_distance_m");
+        s.brake_max_torque_nm = r.number_or("max_torque_nm", 3000.0);
+        s.brake_bias_front_percent = r.optional_number("bias_front_percent");
     }
     {
         auto r = root.child("air");
@@ -183,7 +204,8 @@ ordered_json to_json(const CarSpec& s) {
                     {"track_rear_m", s.track_rear_m}};
     j["tyre"] = {{"mu_x_static", s.mu_x_static},
                  {"mu_x_kinetic", s.mu_x_kinetic},
-                 {"mu_y", s.mu_y}};
+                 {"mu_y", s.mu_y},
+                 {"load_sensitivity", s.tyre_load_sensitivity}};
     j["powertrain"] = {{"primary_reduction", s.primary_reduction},
                        {"final_drive", s.final_drive},
                        {"gear_ratios", s.gear_ratios},
@@ -203,7 +225,9 @@ ordered_json to_json(const CarSpec& s) {
                    {"disc_emissivity", s.brake_disc_emissivity},
                    {"bobbin_count", s.brake_bobbin_count},
                    {"bobbin_diameter_m", s.brake_bobbin_diameter_m},
-                   {"conduction_distance_m", s.brake_conduction_distance_m}};
+                   {"conduction_distance_m", s.brake_conduction_distance_m},
+                   {"max_torque_nm", s.brake_max_torque_nm},
+                   {"bias_front_percent", s.brake_bias_front_percent ? ordered_json(*s.brake_bias_front_percent) : ordered_json(nullptr)}};
     j["air"] = {{"thermal_conductivity_w_mk", s.air_thermal_conductivity_w_mk},
                 {"dynamic_viscosity_pa_s", s.air_dynamic_viscosity_pa_s}};
     return j;

@@ -17,6 +17,7 @@ add_library(fsae_core
     Control/gearbox.cpp
     Simulation/straight.cpp
     Simulation/lap.cpp
+    Simulation/quasi_static.cpp
     Tracks/track.cpp
     Tracks/corner_speed.cpp
     Tracks/geometry.cpp
